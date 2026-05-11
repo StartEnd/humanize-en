@@ -1,19 +1,261 @@
 {
   "_meta": {
-    "version": "0.0.0-m1",
-    "description": "humanize-en detector rules. M1 stub — empty. Rules land in M3 (lexical + phrases) and M4 (structural + rhythm + fake_human + soul_signals).",
-    "sources_planned": [
-      "Manual diff of HC3-en human vs ChatGPT pairs",
-      "Liang et al. arXiv:2403.07183 (the 'delve' paper)",
-      "Plain English Campaign A-Z (public domain)",
-      "GPTZero public methodology (perplexity + burstiness)",
-      "Stanford 'Hallmarks of AI text' analyses"
-    ]
+    "version": "0.3.0",
+    "milestone": "M3-lexical-phrase",
+    "description": "humanize-en detector rules. M3 ships ~16 lexical + phrase rules. M4 adds structural + rhythm + fake_human + soul_signals.",
+    "sources": [
+      "HC3-English mining (scripts/mine_rule_candidates.py) — AI/human ratio on 57k human + 27k ChatGPT answers",
+      "Liang et al. arXiv:2403.07183 — 'The delve paper': post-RLHF lexical tells (delve, meticulous, realm, intricate, ...)",
+      "Plain English Campaign A-Z of alternative words (public domain, http://www.plainenglish.co.uk/files/alternative.pdf) — corporate filler",
+      "GPTZero public methodology — meta-comments and structural transitions",
+      "Stanford 'Hallmarks of AI text' analyses — uniform sentence length + transition density"
+    ],
+    "scoring": {
+      "weight_scale": "Hits scored as: count*weight*0.5 if count<=soft_threshold; count*weight if soft<count<=hard; (count-hard)*weight added on top once hard exceeded.",
+      "normalization": "Total = min(100, sum(rule_scores) / max(1, len(text)/3000)). Length-normalised so a 12k-word essay isn't auto-flagged.",
+      "bands": "0-24 LOW; 25-49 MEDIUM; 50-74 HIGH; 75-100 VERY_HIGH (matches humanize_core._format.level_key)."
+    }
   },
-  "blacklist_words": {},
-  "blacklist_phrases": {},
-  "structural_rules": {},
-  "rhythm_rules": {},
-  "fake_human": {},
-  "soul_signals": {}
+  "blacklist_words": {
+    "_desc": "Single-word AI tells. Each rule sums hits across all patterns and applies the (soft, hard) threshold ladder.",
+    "abstract_possessives": {
+      "_desc": "ChatGPT loves abstract subject's-X constructions. HC3 ratio 23-100x. (e.g. 'the body's natural defense', 'the country's economy')",
+      "weight": 3,
+      "soft_threshold": 2,
+      "hard_threshold": 5,
+      "patterns": [
+        "body's", "earth's", "person's", "country's", "people's",
+        "individual's", "company's", "family's", "world's", "nation's",
+        "child's", "patient's", "client's", "customer's", "user's"
+      ]
+    },
+    "ai_hedging_adverbs": {
+      "_desc": "Vacuous hedge adverbs. HC3 ratio 7-12x. Each rare; many together = AI scaffolding.",
+      "weight": 2,
+      "soft_threshold": 3,
+      "hard_threshold": 8,
+      "patterns": [
+        "carefully", "ultimately", "additionally", "specifically",
+        "generally", "typically", "particularly", "essentially",
+        "fundamentally", "primarily", "predominantly", "subsequently"
+      ]
+    },
+    "ai_categorical_nouns": {
+      "_desc": "Vague catch-all nouns used to enumerate without committing. HC3 ratio 6-11x.",
+      "weight": 2,
+      "soft_threshold": 3,
+      "hard_threshold": 8,
+      "patterns": [
+        "variety", "factors", "challenges", "goals", "preferences",
+        "recommendations", "considerations", "aspects", "elements",
+        "components", "characteristics"
+      ]
+    },
+    "liang_2024_lexical_tells": {
+      "_desc": "Post-RLHF lexical signature of GPT-4 / Claude (Liang 2024 arXiv:2403.07183 Tables 2-3). Rare in HC3 (early-2023 GPT-3.5) but diagnostic in current AI text.",
+      "weight": 4,
+      "soft_threshold": 1,
+      "hard_threshold": 3,
+      "patterns": [
+        "delve", "delves", "delving", "meticulous", "meticulously",
+        "tapestry", "realm", "realms", "intricate", "intricately",
+        "landscape", "ecosystem", "paradigm", "multifaceted",
+        "navigate", "navigating", "embark", "foster", "fosters",
+        "harness", "harnessing"
+      ]
+    },
+    "corporate_filler": {
+      "_desc": "Corporate-speak verbs flagged by Plain English Campaign. Each is a one-word smell of management consulting.",
+      "weight": 3,
+      "soft_threshold": 1,
+      "hard_threshold": 2,
+      "patterns": [
+        "utilize", "utilizes", "utilizing", "utilization",
+        "facilitate", "facilitates", "facilitating",
+        "optimize", "optimizes", "optimizing", "optimization",
+        "streamline", "streamlines", "streamlining",
+        "synergy", "synergies", "synergistic",
+        "leverage", "leverages", "leveraging"
+      ]
+    },
+    "ai_amplifiers": {
+      "_desc": "Vacuous strengtheners. Real writers cut these; ChatGPT sprinkles them. HC3 ratio 3-5x.",
+      "weight": 2,
+      "soft_threshold": 3,
+      "hard_threshold": 6,
+      "patterns": [
+        "incredibly", "remarkably", "truly", "vital", "crucial",
+        "essential", "paramount", "pivotal"
+      ]
+    },
+    "hollow_grand_claims": {
+      "_desc": "Marketing-grade superlatives. Almost never appear in human casual writing.",
+      "weight": 4,
+      "soft_threshold": 0,
+      "hard_threshold": 2,
+      "patterns": [
+        "transformative", "groundbreaking", "revolutionary",
+        "cutting-edge", "state-of-the-art", "next-generation",
+        "innovative", "trailblazing", "pioneering"
+      ]
+    }
+  },
+  "blacklist_phrases": {
+    "_desc": "Multi-word AI tells. Patterns are matched case-insensitively as word-boundary-anchored substrings. Hit accumulation follows the same soft/hard threshold ladder as blacklist_words.",
+    "meta_hedge": {
+      "_desc": "Meta-comments about what the writer is about to say. The single strongest AI tell. HC3 phrase ratio 80-330x. (Liang 2024 + GPTZero methodology.)",
+      "weight": 8,
+      "soft_threshold": 0,
+      "hard_threshold": 1,
+      "patterns": [
+        "it's important to note",
+        "it is important to note",
+        "it's worth noting",
+        "it is worth noting",
+        "it's worth mentioning",
+        "it is worth mentioning",
+        "it should be noted that",
+        "it should be mentioned",
+        "i would like to point out",
+        "i'd like to point out",
+        "please note that"
+      ]
+    },
+    "structural_summary": {
+      "_desc": "Closing-paragraph scaffold. Each is fine once; together they signal AI essay template.",
+      "weight": 6,
+      "soft_threshold": 0,
+      "hard_threshold": 1,
+      "patterns": [
+        "in conclusion",
+        "in summary",
+        "to summarize",
+        "to sum up",
+        "overall, the",
+        "ultimately, the",
+        "in essence"
+      ]
+    },
+    "structural_transitions": {
+      "_desc": "Heavy use of explicit transitions. The n-gram engine also measures transition_density — this rule fires interpretably on the worst offenders so the polish prompt can target them by name.",
+      "weight": 3,
+      "soft_threshold": 2,
+      "hard_threshold": 5,
+      "patterns": [
+        "moreover",
+        "furthermore",
+        "additionally,",
+        "consequently,",
+        "on the other hand",
+        "in contrast,",
+        "nevertheless,",
+        "nonetheless,"
+      ]
+    },
+    "ai_safety_disclaimer": {
+      "_desc": "Verbatim ChatGPT safety boilerplate. Even one is a near-certain AI signature; weight is set so a single hit produces a HIGH score on its own.",
+      "weight": 15,
+      "soft_threshold": 0,
+      "hard_threshold": 0,
+      "patterns": [
+        "as an ai language model",
+        "as an ai assistant",
+        "i'm just an ai",
+        "i am just an ai",
+        "i don't have personal",
+        "i do not have personal",
+        "i don't have opinions",
+        "i'm sorry but i can't",
+        "i'm sorry, i can't",
+        "i'm unable to provide",
+        "it's important to note that i"
+      ]
+    },
+    "reflexive_helpers": {
+      "_desc": "Soft-pedalled advice scaffolding. HC3 ratio 3-9x (especially in finance/medicine subsets).",
+      "weight": 4,
+      "soft_threshold": 0,
+      "hard_threshold": 2,
+      "patterns": [
+        "can be a great way to",
+        "is a great way to",
+        "is one of the best ways",
+        "may help to",
+        "may help you",
+        "good idea to consult",
+        "always a good idea to",
+        "it's always a good idea"
+      ]
+    },
+    "exemplar_padding": {
+      "_desc": "Padding phrases that promise examples without committing to specifics.",
+      "weight": 6,
+      "soft_threshold": 0,
+      "hard_threshold": 1,
+      "patterns": [
+        "including but not limited to",
+        "such as but not limited to",
+        "to name a few",
+        "just to name a few",
+        "among other things",
+        "among others"
+      ]
+    },
+    "generic_caveat": {
+      "_desc": "Non-answer fallbacks. ChatGPT uses these to look comprehensive without giving advice.",
+      "weight": 4,
+      "soft_threshold": 1,
+      "hard_threshold": 3,
+      "patterns": [
+        "depending on a variety of factors",
+        "depends on a number of factors",
+        "depending on a number of factors",
+        "varies depending on",
+        "depending on your individual",
+        "depending on your specific",
+        "factors such as",
+        "a variety of factors"
+      ]
+    },
+    "enumeration_padding": {
+      "_desc": "Listing scaffolds. Real writers say 'three things' or just list; ChatGPT prefaces.",
+      "weight": 4,
+      "soft_threshold": 1,
+      "hard_threshold": 3,
+      "patterns": [
+        "here are a few",
+        "here are some",
+        "there are several",
+        "there are a few",
+        "below are some",
+        "the following are"
+      ]
+    },
+    "important_to_X": {
+      "_desc": "The all-purpose 'important to / essential to / crucial to' scaffold. HC3 3-gram ratio 90-100x for the literal phrase.",
+      "weight": 5,
+      "soft_threshold": 1,
+      "hard_threshold": 3,
+      "patterns": [
+        "important to remember",
+        "important to consider",
+        "important to understand",
+        "essential to understand",
+        "crucial to understand",
+        "key to understanding"
+      ]
+    }
+  },
+  "structural_rules": {
+    "_desc": "M4 will add structural hard-constraint checks (e.g. paragraph-opening diversity, list-density). M3 leaves this empty."
+  },
+  "rhythm_rules": {
+    "_desc": "M4 will add sentence-length CV gates beyond what the n-gram engine surfaces. M3 leaves this empty."
+  },
+  "fake_human": {
+    "_desc": "M4 will add fake-personal-experience detectors. M3 leaves this empty."
+  },
+  "soul_signals": {
+    "_desc": "M4 will add argumentation-quality signals (contrarian view, concrete object, named source). M3 leaves this empty."
+  }
 }

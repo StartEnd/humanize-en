@@ -9,6 +9,67 @@ milestone (M1, M2, ...).
 
 ## [Unreleased]
 
+### M3 — Lexical + phrase rules (in progress)
+
+- Added ``humanize_en/_lang/en/data/rules.json`` (v0.3.0) with
+  **16 concrete rules** across two buckets:
+  - ``blacklist_words`` (7 rules, ~70 patterns):
+    ``abstract_possessives``, ``ai_hedging_adverbs``,
+    ``ai_categorical_nouns``, ``liang_2024_lexical_tells``,
+    ``corporate_filler``, ``ai_amplifiers``,
+    ``hollow_grand_claims``.
+  - ``blacklist_phrases`` (9 rules, ~80 patterns):
+    ``meta_hedge``, ``structural_summary``,
+    ``structural_transitions``, ``ai_safety_disclaimer``,
+    ``reflexive_helpers``, ``exemplar_padding``,
+    ``generic_caveat``, ``enumeration_padding``,
+    ``important_to_X``.
+  - ``structural_rules`` / ``rhythm_rules`` / ``fake_human`` /
+    ``soul_signals`` — scaffolded with ``_desc`` markers for M4.
+- Added mining script ``scripts/mine_rule_candidates.py`` that reuses
+  the engine tokeniser, computes per-word AI/human ratios and per-
+  document 2-/3-gram ratios on the shipped HC3-en cache, and
+  writes TSV candidate tables to ``scripts/_mining/`` (gitignored).
+  Every concrete M3 rule is backed by either a measured HC3 ratio
+  or a cited published prior-art list.
+- Rewrote ``humanize_en/_lang/en/detector.py`` from the M1 stub into
+  the real implementation:
+  - ``_load_rules()`` lru-caches the JSON; fail-open with a
+    ``0.0.0-unloadable`` marker if the file is absent / malformed.
+  - ``_strip_codeblocks()`` — fenced and inline code stripped before
+    matching so a tutorial discussing ``utilize()`` isn't penalised.
+  - ``_build_word_regex`` / ``_build_phrase_regex`` — compile one
+    case-insensitive alternation per rule with apostrophe-aware
+    boundaries (``body's`` matches as a word; internal whitespace
+    in phrase patterns is flexibilised to ``\s+``).
+  - ``_apply_threshold_ladder`` — monotonic (soft, hard) ladder
+    identical to humanize-zh's so cross-language weight tuning
+    transfers.
+  - ``score()`` — length-normalised total (divisor = max(1, len/3000))
+    capped at 100. Returns a ``Score`` with per-rule ``Violation``
+    entries that carry a sample snippet for prompt-pack injection.
+  - ``EnDetector.version`` now reads from
+    ``rules.json::_meta.version`` at construction.
+- **Bug fix: tokeniser ignored HC3's literal ``\n`` escape artefacts.**
+  HC3-en ships answers with 2413 occurrences of the two-character
+  string ``\n`` (backslash + letter ``n``, not real newlines), a
+  legacy double-encoding in the raw dump. Our tokeniser emitted bogus
+  tokens like ``nthe``, ``nin``, ``noverall`` that polluted the freq
+  table and leaked into the n-gram features. Added ``_normalize()``
+  in ``_ngram_engine.py`` that replaces the literal escapes with real
+  newlines before tokenisation — used by both build-time and runtime.
+  **Effect**: re-running ``scripts/build_ngram_data.py`` with the
+  fix lifted held-out test AUC from **0.8597 → 0.8847** (+0.025).
+- Added 24 detector tests (``tests/test_detector.py``): rule-data
+  shape, threshold-ladder parametrised cases, regex builders (word
+  boundaries + apostrophes + case-insensitivity + whitespace flex),
+  per-rule firing behaviour, code-block stripping, AI-vs-natural
+  discrimination, and length-normalisation invariants.
+- Updated ``tests/test_protocols.py``: flipped M1 "stub" assertion
+  to M3 "clean text → zero score with populated stats".
+- Total test count: **54** (16 protocol + 14 ngram + 24 detector),
+  90% coverage, ruff/mypy clean.
+
 ### M2 — HC3-en n-gram engine (in progress)
 
 - Added stdlib-only feature engine
@@ -45,7 +106,8 @@ milestone (M1, M2, ...).
 - features: 12 (see `FEATURE_ORDER` in build script)
 - model: `sklearn.LogisticRegression(C=1.0)`, seed=42
 - training set: 8 000 human + 8 000 AI (stratified train split)
-- **held-out test AUC = 0.8597** ✅ (M2 gate: ≥ 0.75)
+- **held-out test AUC = 0.8847** ✅ (M2 gate: ≥ 0.75) — was 0.8597
+  before the M3 ``\\n`` tokeniser fix; see M3 bug-fix note.
 
 **Calibration limitations** (documented for honesty):
 - HC3-en human answers skew toward formal QA (Reddit ELI5, finance,

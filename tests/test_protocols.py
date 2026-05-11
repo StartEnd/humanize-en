@@ -162,20 +162,22 @@ def test_entry_point_string_matches_pyproject() -> None:
 # ─── Honest component status (M1 stubs) ─────────────────────────────────
 
 
-def test_detector_returns_zero_score_with_stub_status_marker() -> None:
-    """The M1 stub detector must return ``total=0.0`` and surface its
-    status in ``stats`` so callers can detect "this is a stub" without
-    reading the source. Once M3 lands real rules this test will be
-    updated to assert non-zero scores on tell-laden samples — but the
-    contract that ``stats`` is a dict stays.
+def test_detector_runs_clean_text_without_firing_rules() -> None:
+    """A short, naturally-phrased English sentence with none of the
+    M3 lexical / phrase tells must produce ``total=0.0``, zero
+    violations, and a populated ``stats`` dict (version + rule
+    count). M1 used to assert "stub" presence in stats; M3 ships
+    real rules so we assert the engine ran cleanly instead.
     """
     from humanize_en._lang.en.detector import en_detector
 
-    s = en_detector.score("This is a fairly normal sentence in English.")
+    s = en_detector.score("The cat sat by the window watching birds.")
     assert isinstance(s, RuleScoreResult)
     assert s.total == 0.0
     assert s.violations == []
-    assert "M1 stub" in s.stats.get("detector_status", "")
+    # Stats now record the rule-set version + how many rules fired.
+    assert s.stats.get("rule_set_version", "").startswith(("0.", "1."))
+    assert s.stats.get("rule_count_evaluated", -1) == 0
 
 
 def test_ngram_engine_is_available_with_calibration_shipped() -> None:

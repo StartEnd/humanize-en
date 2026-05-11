@@ -48,3 +48,6 @@ models/
 
 # Generated docs/benchmarks output (M8+)
 docs/benchmarks/*.json
+
+# Mining / debugging output (scripts/_mining/)
+scripts/_mining/

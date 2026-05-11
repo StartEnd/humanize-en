@@ -90,8 +90,8 @@ def make_en_profile() -> LanguageProfile:
             "corpus": "HC3-English",
             "rule_set_version": en_detector.version,
             "ngram_corpus_id": en_ngram.corpus_id,
-            "ngram_test_auc": "0.8597",  # held-out test AUC, see CHANGELOG M2
-            "milestone": "M2-ngram",
+            "ngram_test_auc": "0.8847",  # held-out test AUC, see CHANGELOG M2
+            "milestone": "M3-rules",
         },
     )
 

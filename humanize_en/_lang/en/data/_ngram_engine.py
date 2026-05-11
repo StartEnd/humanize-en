@@ -110,6 +110,23 @@ def _load_freq() -> dict[str, Any]:
 _WORD_RE = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
 _SENT_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"\'(\[])|\n+")
 _PARA_SPLIT_RE = re.compile(r"\n\s*\n+")
+# HC3-en (Hello-SimpleAI/HC3) ships answers with literal ``\n``
+# escape sequences (backslash + ``n``, not real newlines). Without
+# normalisation our tokeniser was emitting bogus tokens like
+# ``nthe``, ``nin``, ``noverall`` — they functionally correlate with
+# paragraph breaks but pollute the freq table and break clean phrase
+# lookup at scoring time. Fix once here for both build + runtime.
+_LITERAL_NEWLINE_RE = re.compile(r"\\n")
+
+
+def _normalize(text: str) -> str:
+    """Pre-tokenisation normalisation.
+
+    - Replace HC3-style literal ``\\n`` two-char sequences with real
+      newlines so paragraph structure survives and ``n`` doesn't get
+      glued onto the next word.
+    """
+    return _LITERAL_NEWLINE_RE.sub("\n", text)
 
 
 def _tokens(text: str) -> list[str]:
@@ -117,6 +134,7 @@ def _tokens(text: str) -> list[str]:
     together (``don't``, ``it's``) — important so common contractions
     have stable bigram frequencies in the table.
     """
+    text = _normalize(text)
     return [m.group(0).lower() for m in _WORD_RE.finditer(text)]
 
 
@@ -125,11 +143,13 @@ def _sentences(text: str) -> list[str]:
     followed by whitespace + capital/quote, OR on hard newlines.
     Avoids splitting ``Dr. Smith`` or ``e.g.`` mid-abbreviation.
     """
+    text = _normalize(text)
     parts = _SENT_SPLIT_RE.split(text)
     return [p.strip() for p in parts if p.strip()]
 
 
 def _paragraphs(text: str) -> list[str]:
+    text = _normalize(text)
     return [p.strip() for p in _PARA_SPLIT_RE.split(text) if p.strip()]
 
 
