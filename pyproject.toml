@@ -53,6 +53,20 @@ dev = [
     "mypy>=1.10",
     "httpx>=0.27",  # for FastAPI TestClient
 ]
+# `build-data` extra (M2): training script for the n-gram freq table
+# + LR calibration. Build-time only; never imported at runtime by
+# the published wheel. Run via:
+#     uv run --extra build-data python scripts/build_ngram_data.py
+build-data = [
+    # We pull HC3-en raw JSONL directly via huggingface_hub instead of
+    # the higher-level ``datasets`` lib because ``datasets>=3.0`` dropped
+    # support for Python loader scripts (HC3 ships ``HC3.py``). The hub
+    # client is lighter, deterministic, and lets us record the dataset
+    # commit SHA in the freq-table metadata.
+    "huggingface-hub>=0.20",
+    "scikit-learn>=1.3",  # LogisticRegression + train_test_split + AUC
+    "numpy>=1.24",
+]
 all = ["humanize-en[openai,anthropic,ui]"]
 
 [project.scripts]

@@ -87,10 +87,11 @@ def make_en_profile() -> LanguageProfile:
         prompt_pack=_build_en_prompt_pack(),
         level_labels=dict(EN_LEVEL_LABELS),  # defensive copy
         metadata={
-            "corpus": "HC3-English (planned, M2)",
+            "corpus": "HC3-English",
             "rule_set_version": en_detector.version,
             "ngram_corpus_id": en_ngram.corpus_id,
-            "milestone": "M1-scaffold",
+            "ngram_test_auc": "0.8597",  # held-out test AUC, see CHANGELOG M2
+            "milestone": "M2-ngram",
         },
     )
 

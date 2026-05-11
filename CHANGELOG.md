@@ -9,7 +9,53 @@ milestone (M1, M2, ...).
 
 ## [Unreleased]
 
-### M1 — Scaffold (in progress)
+### M2 — HC3-en n-gram engine (in progress)
+
+- Added stdlib-only feature engine
+  (`humanize_en/_lang/en/data/_ngram_engine.py`, ~390 lines): bigram
+  perplexity with unigram backoff, burstiness CV, paragraph entropy
+  uniformity, transition-phrase density, sentence-length stats,
+  word MATTR, and comma/punctuation density. Each function is
+  independently testable; runtime imports zero third-party deps.
+- Added build script (`scripts/build_ngram_data.py`) that downloads
+  HC3-en via `huggingface_hub` (raw `all.jsonl`, ~74 MB), counts
+  unigrams + bigrams on the human side (57 638 answers, 6.9 M
+  tokens), trims to top 500 k bigrams (preserves 85.1 % of mass),
+  fits sklearn LogisticRegression on a balanced 10 k human / 10 k AI
+  subset with stratified 80/20 split, and writes:
+  - `humanize_en/_lang/en/data/ngram_freq_en.json.gz` (3.04 MB)
+  - `humanize_en/_lang/en/data/lr_coef_en.json` (~3 KB)
+- Replaced the M1 stub `humanize_en/_lang/en/ngram.py` with a real
+  loader that combines the engine + LR. Honours the
+  `NgramEngine` protocol contract: `available` is `True` only when
+  both calibration files load; `score()` always returns a valid
+  `NgramScore` (never raises).
+- Added `[build-data]` extra (`huggingface-hub`, `scikit-learn`,
+  `numpy`) — declared *outside* runtime deps so wheel users never
+  pull HF / sklearn.
+- Added 14 new tests (`tests/test_ngram.py`): calibration provenance,
+  per-feature engine sanity, end-to-end scoring, and direction-only
+  discrimination between AI-tell-laden and natural-prose paragraphs.
+- Updated `tests/test_protocols.py`: flipped M1 "engine unavailable"
+  assertion to M2 "engine available with shipped calibration"; added
+  AUC ≥ 0.75 gate and corpus-id assertion.
+
+**Calibration provenance** (recorded in `lr_coef_en.json::_meta`):
+- corpus: `Hello-SimpleAI/HC3` revision `4d0ff18143b5`
+- features: 12 (see `FEATURE_ORDER` in build script)
+- model: `sklearn.LogisticRegression(C=1.0)`, seed=42
+- training set: 8 000 human + 8 000 AI (stratified train split)
+- **held-out test AUC = 0.8597** ✅ (M2 gate: ≥ 0.75)
+
+**Calibration limitations** (documented for honesty):
+- HC3-en human answers skew toward formal QA (Reddit ELI5, finance,
+  medicine, wiki). Single-text scoring on out-of-distribution input
+  (e.g. personal narrative) shows higher false-positive rates than
+  the corpus-level AUC suggests. Direction-of-effect remains correct;
+  M4 (per-domain rules) and M8 (RAID validation) will quantify and
+  improve OOD generalisation.
+
+### M1 — Scaffold
 
 - Initial repository scaffold under `Humanize/humanize-en/`.
 - `pyproject.toml` declares the `humanize_core.languages` entry point

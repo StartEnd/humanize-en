@@ -107,11 +107,14 @@ def test_en_profile_metadata_records_milestone() -> None:
     from humanize_en._lang.en.profile import en_profile
 
     md = en_profile.metadata
-    assert md["milestone"] == "M1-scaffold"
+    # M1 scaffold is now M2-ngram. Future milestones will keep bumping
+    # this; the test asserts presence + canonical prefix only.
+    assert md["milestone"].startswith("M")
     assert md["rule_set_version"] == en_profile.detector.version
-    # The ngram corpus_id is allowed to advertise "planned" at M1 —
-    # M2 will replace it with the real corpus identifier.
-    assert "HC3" in md["corpus"] or "planned" in md["corpus"].lower()
+    # M2 ships HC3-English calibration; "planned" was the M1 stub.
+    assert md["corpus"] == "HC3-English"
+    # AUC must be recorded as a string-encoded float for stability.
+    assert float(md["ngram_test_auc"]) >= 0.75
 
 
 # ─── Auto-registration on import ────────────────────────────────────────
@@ -175,25 +178,24 @@ def test_detector_returns_zero_score_with_stub_status_marker() -> None:
     assert "M1 stub" in s.stats.get("detector_status", "")
 
 
-def test_ngram_engine_reports_unavailable_with_clear_reason() -> None:
-    """The M1 stub ngram engine must advertise ``available=False`` and
-    return a human-readable reason. The combined-score code in
-    humanize-core falls back to rule-only when this happens, so this
-    is the contract that keeps end-to-end pipelines from crashing
-    pre-M2.
+def test_ngram_engine_is_available_with_calibration_shipped() -> None:
+    """M2 ships the HC3-en frequency table + LR coefficients in
+    ``humanize_en/_lang/en/data/``. The engine must advertise
+    ``available=True`` and ``reason_unavailable()`` must return
+    ``None``. (M1 used to assert the opposite — flipped here when
+    M2 landed real calibration data.)
     """
     from humanize_en._lang.en.ngram import en_ngram
 
-    assert en_ngram.available is False
-    reason = en_ngram.reason_unavailable()
-    assert reason is not None
-    assert "M1 stub" in reason or "not yet built" in reason
-    # Even when unavailable, score() must still return a valid
-    # NgramScoreResult — never raise. Protocol contract from
-    # humanize_core.protocols.NgramEngine docstring.
-    result = en_ngram.score("hello world")
+    assert en_ngram.available is True
+    assert en_ngram.reason_unavailable() is None
+    # score() returns a valid NgramScoreResult.
+    result = en_ngram.score(
+        "hello world this is a fairly normal English sentence "
+        "that should score below the AI threshold."
+    )
     assert isinstance(result, NgramScoreResult)
-    assert result.available is False
+    assert result.available is True
 
 
 def test_replacements_table_loads_empty_pairs_at_m1() -> None:
