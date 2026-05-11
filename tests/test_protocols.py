@@ -200,15 +200,23 @@ def test_ngram_engine_is_available_with_calibration_shipped() -> None:
     assert result.available is True
 
 
-def test_replacements_table_loads_empty_pairs_at_m1() -> None:
-    """The M1 stub replacements.json has empty buckets — loader must
-    return an empty tuple without raising. M5 will populate ~80 pairs.
+def test_replacements_table_loads_populated_pairs_at_m5() -> None:
+    """M5 ships ~85 deterministic-cleanup pairs across 6 buckets. The
+    loader returns them pre-ordered (bucket order × length-desc within
+    bucket). M1 used to assert ``pairs == ()``; this is the M5 flip.
     """
     from humanize_en._lang.en.replacements import en_replacements
 
     pairs = en_replacements.ordered_pairs()
     assert isinstance(pairs, tuple)
-    assert pairs == ()
+    assert len(pairs) >= 80, (
+        f"M5 promises >= 80 pairs; got {len(pairs)}. "
+        f"Check humanize_en/_lang/en/data/replacements.json."
+    )
+    # Every pair is a 2-tuple of non-empty old + possibly-empty new.
+    for old, new in pairs:
+        assert isinstance(old, str) and old
+        assert isinstance(new, str)
 
 
 def test_prompt_pack_carries_framework_en_templates() -> None:

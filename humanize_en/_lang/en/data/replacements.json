@@ -1,15 +1,24 @@
 {
   "_meta": {
-    "version": "0.0.0-m1",
-    "description": "humanize-en deterministic-cleanup pairs. M1 stub — empty. ~80 pairs land in M5.",
-    "license": "MIT (this file)",
-    "attribution_planned": [
-      "Plain English Campaign A-Z of alternative words (public domain, http://www.plainenglish.co.uk/files/alternative.pdf)",
-      "Strunk & White, Elements of Style 1918 edition (public domain)",
-      "Selected entries from Humano (MIT, https://github.com/khushiyant/humano)"
+    "version": "0.5.0",
+    "milestone": "M5-replacements",
+    "description": "humanize-en deterministic-cleanup pairs. ~85 pairs across 6 buckets. Applied by humanize_core.postprocess before the polish LLM so the LLM never has to 'delete' boilerplate — it just rewrites what's left.",
+    "license": "MIT (this file); source attribution below is required but all sources are public-domain or MIT.",
+    "attribution": [
+      "Plain English Campaign A-Z of alternative words (public domain, http://www.plainenglish.co.uk/files/alternative.pdf) — corporate_filler bucket",
+      "Strunk & White, Elements of Style, 1918 edition (public domain) — filler_opener bucket, empty_grand bucket",
+      "Liang et al. arXiv:2403.07183 'delve paper' — delve_class bucket, plain-English substitutes chosen by the humanize-en authors",
+      "ChatGPT safety-boilerplate list compiled from the HC3-en mining pass (scripts/mine_rule_candidates.py) — safety_disclaimer bucket"
+    ],
+    "application_notes": [
+      "Patterns are literal strings (no regex); matched as substrings, case-sensitive. Capitalisation variants that matter (e.g. 'In conclusion, ' at sentence start) are spelt out as separate pairs.",
+      "Buckets apply in the order declared by '_order'. Within each bucket, the loader re-sorts by len(old) descending so 'utilization' matches before 'utilize'.",
+      "Trailing spaces in 'old' are intentional — they let 'In conclusion, ' -> '' leave no double-space artefact when the filler sits between two words.",
+      "Empty 'new' means delete — chosen for meta-commentary and filler openers where the next clause reads fine without the hedge."
     ]
   },
   "replacements": {
+    "_desc": "Each bucket is a list of [old, new] pairs. Applied left-to-right; later pairs see output of earlier pairs.",
     "_order": [
       "safety_disclaimer",
       "corporate_filler",
@@ -18,11 +27,125 @@
       "delve_class",
       "filler_opener"
     ],
-    "safety_disclaimer": [],
-    "corporate_filler": [],
-    "empty_grand": [],
-    "meta_hedge": [],
-    "delve_class": [],
-    "filler_opener": []
+
+    "safety_disclaimer": [
+      ["As an AI language model, ", ""],
+      ["As an AI assistant, ", ""],
+      ["I'm just an AI. ", ""],
+      ["I am just an AI. ", ""],
+      ["I'm just an AI, ", ""],
+      ["I am just an AI, ", ""],
+      ["I don't have personal opinions, but ", ""],
+      ["I do not have personal opinions, but ", ""],
+      ["I don't have personal opinions. ", ""],
+      ["I do not have personal opinions. ", ""],
+      ["I don't have opinions, but ", ""],
+      ["It's important to note that I ", "I "],
+      ["It is important to note that I ", "I "],
+      ["I'm unable to provide ", "I can't share "],
+      ["I am unable to provide ", "I can't share "]
+    ],
+
+    "corporate_filler": [
+      ["utilization", "use"],
+      ["utilizing", "using"],
+      ["utilizes", "uses"],
+      ["utilize", "use"],
+      ["facilitating", "helping"],
+      ["facilitates", "helps"],
+      ["facilitate", "help"],
+      ["leveraging", "using"],
+      ["leverages", "uses"],
+      ["leverage", "use"],
+      ["optimization", "improvement"],
+      ["optimizing", "improving"],
+      ["optimizes", "improves"],
+      ["optimize", "improve"],
+      ["streamlining", "simplifying"],
+      ["streamlines", "simplifies"],
+      ["streamline", "simplify"],
+      ["in order to ", "to "],
+      ["prior to ", "before "],
+      ["subsequent to ", "after "],
+      ["in the event that ", "if "],
+      ["with respect to ", "about "],
+      ["pertaining to ", "about "],
+      ["regarding ", "about "],
+      ["commences", "starts"],
+      ["commenced", "started"],
+      ["commence", "start"],
+      ["sufficient", "enough"],
+      ["numerous", "many"],
+      ["a number of ", "some "]
+    ],
+
+    "empty_grand": [
+      ["transformative", "useful"],
+      ["groundbreaking", "new"],
+      ["revolutionary", "new"],
+      ["state-of-the-art", "modern"],
+      ["cutting-edge", "modern"],
+      ["next-generation", "newer"],
+      ["trailblazing", "early"],
+      ["pioneering", "early"],
+      ["paradigm shift", "big change"],
+      ["game-changer", "big change"],
+      ["game-changing", "big"],
+      ["unparalleled", "unmatched"]
+    ],
+
+    "meta_hedge": [
+      ["It's important to note that ", ""],
+      ["It is important to note that ", ""],
+      ["It's worth noting that ", ""],
+      ["It is worth noting that ", ""],
+      ["It's worth mentioning that ", ""],
+      ["It is worth mentioning that ", ""],
+      ["It should be noted that ", ""],
+      ["It should be mentioned that ", ""],
+      ["I would like to point out that ", ""],
+      ["I'd like to point out that ", ""],
+      ["Please note that ", ""],
+      ["It is worth highlighting that ", ""],
+      ["It's worth highlighting that ", ""]
+    ],
+
+    "delve_class": [
+      ["delves into", "looks at"],
+      ["delving into", "looking at"],
+      ["delve into", "look at"],
+      ["meticulously", "carefully"],
+      ["meticulous", "careful"],
+      ["tapestry of", "mix of"],
+      ["tapestry", "mix"],
+      ["intricately", "carefully"],
+      ["intricate", "detailed"],
+      ["multifaceted", "many-sided"],
+      ["navigating the", "handling the"],
+      ["navigate the", "handle the"],
+      ["embarking on", "starting"],
+      ["embark on", "start"],
+      ["harnessing the", "using the"],
+      ["harness the", "use the"],
+      ["fostering", "building"],
+      ["fosters", "builds"],
+      ["foster ", "build "]
+    ],
+
+    "filler_opener": [
+      ["In conclusion, ", ""],
+      ["To conclude, ", ""],
+      ["In summary, ", ""],
+      ["To summarize, ", ""],
+      ["To sum up, ", ""],
+      ["Overall, ", ""],
+      ["Ultimately, ", ""],
+      ["In essence, ", ""],
+      ["Moreover, ", ""],
+      ["Furthermore, ", ""],
+      ["Additionally, ", ""],
+      ["Consequently, ", "So "],
+      ["First and foremost, ", "First, "]
+    ]
   }
 }

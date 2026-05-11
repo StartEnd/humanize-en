@@ -9,6 +9,45 @@ milestone (M1, M2, ...).
 
 ## [Unreleased]
 
+### M5 — Deterministic replacement table (in progress)
+
+- Filled ``humanize_en/_lang/en/data/replacements.json`` (v0.5.0) —
+  was a 6-bucket empty stub at M1, now carries **102 curated
+  [old, new] pairs** across the six buckets:
+  - ``safety_disclaimer`` (15): ``"As an AI language model, "`` → ``""``
+    and 14 siblings.
+  - ``corporate_filler`` (30): ``utilize`` → ``use``, ``facilitate``
+    → ``help``, ``leverage`` → ``use``, ``in order to`` → ``to``,
+    ``pertaining to`` → ``about``, etc. (Plain English Campaign).
+  - ``empty_grand`` (12): ``transformative`` → ``useful``,
+    ``paradigm shift`` → ``big change``, ``game-changer`` →
+    ``big change``, etc.
+  - ``meta_hedge`` (13): ``"It is important to note that "`` → ``""``
+    and 12 siblings.
+  - ``delve_class`` (19): ``delve into`` → ``look at``,
+    ``tapestry of`` → ``mix of``, ``meticulous`` → ``careful``,
+    ``multifaceted`` → ``many-sided``, etc. (Liang 2024 signatures).
+  - ``filler_opener`` (13): ``"In conclusion, "`` → ``""``,
+    ``"First and foremost, "`` → ``"First, "`` etc.
+- Pairs are **literal substrings** (no regex); loader re-sorts each
+  bucket longest-first so ``utilization`` matches before ``utilize``
+  (and ``delves into`` before ``delve into``).
+- All ``new`` values hand-audited so no pair creates a loop —
+  ``new`` never contains the pair's own ``old``. Test
+  ``test_no_pair_creates_a_recursive_expansion`` enforces this.
+- Attribution recorded in ``_meta.attribution`` per bucket (Plain
+  English Campaign, Strunk & White, Liang 2024, HC3 mining).
+- Added 14 replacement tests (``tests/test_replacements.py``):
+  JSON-shape, pair validation, pair-count promise (80-130), bucket
+  ordering + length-sort, LRU cache identity, end-to-end
+  substitutions on curated samples, idempotency (pipeline == pipeline
+  twice), safety-disclaimer preservation of surrounding text, and
+  the self-loop guard mentioned above.
+- Updated ``tests/test_protocols.py``: flipped M1 "empty tuple"
+  assertion to M5 "populated tuple with shape invariants".
+- Total test count: **89** (75 M4 + 14 M5), 91% coverage, ruff/mypy
+  clean.
+
 ### M4 — Structural + rhythm + fake-human + soul signals (in progress)
 
 - **10 new rules** across the four remaining rule buckets in
