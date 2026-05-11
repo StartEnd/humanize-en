@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.cache
+
+# Type / lint caches
+.mypy_cache/
+.ruff_cache/
+
+# uv lockfile is committed (reproducible builds); .venv is not
+# (rebuilt by `uv sync`).
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Local-only data (M2+ will download HC3 + RAID corpora here)
+.data/
+*.csv.gz
+
+# Local LM weights for [perplexity] extra (M7+) — never committed
+.cache/huggingface/
+models/
+
+# Generated docs/benchmarks output (M8+)
+docs/benchmarks/*.json

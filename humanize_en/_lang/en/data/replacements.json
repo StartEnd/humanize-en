@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "version": "0.0.0-m1",
+    "description": "humanize-en deterministic-cleanup pairs. M1 stub — empty. ~80 pairs land in M5.",
+    "license": "MIT (this file)",
+    "attribution_planned": [
+      "Plain English Campaign A-Z of alternative words (public domain, http://www.plainenglish.co.uk/files/alternative.pdf)",
+      "Strunk & White, Elements of Style 1918 edition (public domain)",
+      "Selected entries from Humano (MIT, https://github.com/khushiyant/humano)"
+    ]
+  },
+  "replacements": {
+    "_order": [
+      "safety_disclaimer",
+      "corporate_filler",
+      "empty_grand",
+      "meta_hedge",
+      "delve_class",
+      "filler_opener"
+    ],
+    "safety_disclaimer": [],
+    "corporate_filler": [],
+    "empty_grand": [],
+    "meta_hedge": [],
+    "delve_class": [],
+    "filler_opener": []
+  }
+}

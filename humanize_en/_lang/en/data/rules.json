@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "version": "0.0.0-m1",
+    "description": "humanize-en detector rules. M1 stub — empty. Rules land in M3 (lexical + phrases) and M4 (structural + rhythm + fake_human + soul_signals).",
+    "sources_planned": [
+      "Manual diff of HC3-en human vs ChatGPT pairs",
+      "Liang et al. arXiv:2403.07183 (the 'delve' paper)",
+      "Plain English Campaign A-Z (public domain)",
+      "GPTZero public methodology (perplexity + burstiness)",
+      "Stanford 'Hallmarks of AI text' analyses"
+    ]
+  },
+  "blacklist_words": {},
+  "blacklist_phrases": {},
+  "structural_rules": {},
+  "rhythm_rules": {},
+  "fake_human": {},
+  "soul_signals": {}
+}
