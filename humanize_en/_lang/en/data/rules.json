@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "version": "0.3.0",
-    "milestone": "M3-lexical-phrase",
-    "description": "humanize-en detector rules. M3 ships ~16 lexical + phrase rules. M4 adds structural + rhythm + fake_human + soul_signals.",
+    "version": "0.4.0",
+    "milestone": "M4-structural-rhythm-fake-soul",
+    "description": "humanize-en detector rules. M3 shipped 16 lexical + phrase rules. M4 adds 10 rules across structural (2) / rhythm (4) / fake_human (2) / soul_signals (2).",
     "sources": [
       "HC3-English mining (scripts/mine_rule_candidates.py) — AI/human ratio on 57k human + 27k ChatGPT answers",
       "Liang et al. arXiv:2403.07183 — 'The delve paper': post-RLHF lexical tells (delve, meticulous, realm, intricate, ...)",
@@ -247,15 +247,99 @@
     }
   },
   "structural_rules": {
-    "_desc": "M4 will add structural hard-constraint checks (e.g. paragraph-opening diversity, list-density). M3 leaves this empty."
+    "_desc": "Hard-constraint structure checks that fire once per text when their metric crosses the threshold. Unlike blacklist_* rules these do NOT accumulate by count — each rule is a yes/no gate with a fixed penalty.",
+    "heading_density": {
+      "_desc": "Markdown heading (## / ###) density. HC3 human answers never use headings (Reddit-style prose); ChatGPT essay outputs regularly ship '## Section' scaffolds. Threshold: > 3 headings per 1000 chars in text >= 500 chars.",
+      "weight": 5,
+      "min_text_length": 500,
+      "threshold_per_1000_chars": 3
+    },
+    "list_density": {
+      "_desc": "% of non-empty lines starting with bullet/numbered markers. AI listicle outputs exceed 50% easily; human prose is usually <20%. Guards against ChatGPT's listification reflex.",
+      "weight": 5,
+      "min_text_length": 500,
+      "threshold_ratio": 0.5
+    }
   },
   "rhythm_rules": {
-    "_desc": "M4 will add sentence-length CV gates beyond what the n-gram engine surfaces. M3 leaves this empty."
+    "_desc": "Numeric gates on sentence / paragraph rhythm. Thresholds calibrated by scripts/calibrate_rhythm.py on HC3-en (85k answers). Each rule fires once if its metric crosses the AI threshold; the n-gram engine tracks the same numbers continuously — rhythm_rules give interpretable, prompt-injectable violations on the worst offenders.",
+    "sentence_length_cv": {
+      "_desc": "Coefficient of variation of word-counts across sentences. HC3 calibration: human p25=0.35, AI p75=0.42; AI median 0.32 vs human median 0.47. CV < 0.35 => uniform sentences => AI tell.",
+      "weight": 10,
+      "min_sentences": 5,
+      "ai_threshold": 0.35
+    },
+    "short_sentence_ratio": {
+      "_desc": "Fraction of sentences under 6 words. HC3: human p75=0.14 vs AI p75=0.00 — ChatGPT almost never uses fragments. Requires >=300 chars so tiny answers aren't flagged.",
+      "weight": 4,
+      "min_text_length": 300,
+      "min_sentences": 5,
+      "ai_threshold": 0.02
+    },
+    "paragraph_uniformity": {
+      "_desc": "CV of paragraph character-counts. Huge HC3 gap: human p25=1.78, AI p75=0.36 (AI paragraphs are remarkably uniform). Paragraph CV < 0.3 with >=3 paragraphs => AI tell.",
+      "weight": 6,
+      "min_paragraphs": 3,
+      "ai_threshold": 0.3
+    },
+    "para_opening_enumeration": {
+      "_desc": "Paragraphs starting with enumeration or transition markers (First,/Moreover,/Additionally,/1./2./*). AI uses these >= 3 times in structured answers; human prose blends them inline.",
+      "weight": 5,
+      "hard_threshold": 2,
+      "pattern": "^\\s*(first(?:ly)?,|second(?:ly)?,|third(?:ly)?,|finally,|lastly,|moreover,|furthermore,|additionally,|in\\s+addition,|on\\s+the\\s+other\\s+hand,|in\\s+contrast,|\\d+[\\.\\)]\\s+|[-*\u2022]\\s+)"
+    }
   },
   "fake_human": {
-    "_desc": "M4 will add fake-personal-experience detectors. M3 leaves this empty."
+    "_desc": "Pseudo-personal-experience regexes. Only enforced when has_notes=False — if the author has a real notes.md their first-person claims are presumed honest. Patterns are regex. Fixed penalty per hit (weight * max(count, hard_threshold)); no threshold-ladder — a single fake claim is already a problem.",
+    "vague_personal_experience": {
+      "_desc": "Generic first-person experience claims without concrete details. Liang 2024 notes these as common ChatGPT hedges to sound relatable.",
+      "weight": 5,
+      "hard_threshold": 1,
+      "regex": true,
+      "patterns": [
+        "\\bin my (?:personal )?experience\\b",
+        "\\bfrom my (?:personal )?experience\\b",
+        "\\bbased on my experience\\b",
+        "\\bspeaking from (?:personal )?experience\\b",
+        "\\bas someone who (?:has|is) (?:been|worked|lived|tried|used)\\b",
+        "\\bi['\u2019]ve been (?:\\w+ing )?for \\d+ (?:years|months)\\b",
+        "\\bfor the past \\d+ years\\b(?!.*\\b(?:studies|research|reports|data)\\b)",
+        "\\bi['\u2019]ve found that\\b",
+        "\\bin my \\d+ years of\\b"
+      ]
+    },
+    "generic_authority_claim": {
+      "_desc": "Bare assertions of credibility that appear without follow-up specifics. HC3 ratio low but false-positive-cost in humanize workflows is also low since real writers rarely use these verbatim.",
+      "weight": 5,
+      "hard_threshold": 1,
+      "regex": true,
+      "patterns": [
+        "\\btrust me\\b,",
+        "\\bbelieve me\\b,",
+        "\\bi strongly believe that\\b",
+        "\\bi firmly believe that\\b",
+        "\\bi can assure you\\b"
+      ]
+    }
   },
   "soul_signals": {
-    "_desc": "M4 will add argumentation-quality signals (contrarian view, concrete object, named source). M3 leaves this empty."
+    "_desc": "Argumentation-quality signals that should be PRESENT in human writing. Each rule fires when its signal count is BELOW min_threshold, adding (min_threshold - count) * weight to the AI score. Think of it as 'penalty for missing human fingerprints'.",
+    "concrete_specifics": {
+      "_desc": "Proper nouns, numbers, and dates ground writing in reality. HC3 AI answers often pass on these (generic enough to sound universal). Counts: Title-Case multi-word names, standalone numbers >= 2 digits, YYYY dates. Min 2 in text >=300 chars. case_insensitive MUST be false — the Title-Case branch relies on case to find proper nouns.",
+      "weight": 5,
+      "min_threshold": 2,
+      "min_text_length": 300,
+      "regex": true,
+      "case_insensitive": false,
+      "pattern": "\\b[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)+\\b|\\b\\d{2,}\\b|\\b(?:19|20)\\d{2}\\b"
+    },
+    "contrarian_hinge": {
+      "_desc": "Argumentative hinge words (but, however, actually, unless, although, despite, yet) signal that the writer is contrasting ideas, not just enumerating. Missing in text >=300 chars => mechanical listing, not thinking.",
+      "weight": 5,
+      "min_threshold": 1,
+      "min_text_length": 300,
+      "regex": true,
+      "pattern": "\\b(?:but|however,|actually,|unless|although|despite|yet,)\\b"
+    }
   }
 }

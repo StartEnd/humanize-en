@@ -39,11 +39,19 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+from statistics import mean, pstdev
 
 from ._labels import en_level_label as level_label
+
+# Reuse the ngram engine's tokeniser + sentence/paragraph splitters so
+# rhythm rules see exactly the same structure the ngram engine sees.
+# Keeps rhythm + ngram in lock-step and avoids a parallel splitter that
+# might drift at the next tokenisation tweak (see M3 "\\n" bug fix).
+from .data._ngram_engine import _paragraphs, _sentences, _tokens
 
 # Path to the rule data file. The Detector adapter reads the
 # ``_meta.version`` from here at construction so the runtime version
@@ -268,18 +276,263 @@ def _check_phrase_rule(text: str, rule: str, conf: dict) -> Violation | None:
     )
 
 
+# ─── M4: structural / rhythm / fake_human / soul_signals ─────────────────
+
+
+_MD_HEADING_RE = re.compile(r"(?:^|\n)#{1,6}\s+\S", re.MULTILINE)
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*\u2022]\s+|\d+[\.\)]\s+)", re.MULTILINE)
+
+
+def _check_structural(text: str, rules: dict) -> list[Violation]:
+    """Run the ``structural_rules`` block.
+
+    Two rules at M4 — ``heading_density`` and ``list_density``. Each
+    fires at most once per text (pass/fail gate, no count-based
+    escalation). Both skip if the text is below ``min_text_length``
+    so short answers aren't penalised for being answer-shaped.
+    """
+    out: list[Violation] = []
+    n_chars = len(text)
+
+    hd = rules.get("heading_density")
+    if isinstance(hd, dict):
+        min_len = int(hd.get("min_text_length", 500))
+        if n_chars >= min_len:
+            headings = len(_MD_HEADING_RE.findall(text))
+            per_1k = headings * 1000 / max(n_chars, 1)
+            threshold = float(hd.get("threshold_per_1000_chars", 3))
+            if per_1k > threshold:
+                weight = int(hd.get("weight", 5))
+                out.append(Violation(
+                    category="structural_rules", rule="heading_density",
+                    weight=weight, count=headings,
+                    sample=f"{headings} markdown headings ({per_1k:.1f}/1k chars > {threshold})",
+                    threshold=int(threshold), score=weight,
+                ))
+
+    ld = rules.get("list_density")
+    if isinstance(ld, dict):
+        min_len = int(ld.get("min_text_length", 500))
+        if n_chars >= min_len:
+            lines = [ln for ln in text.split("\n") if ln.strip()]
+            if lines:
+                list_lines = sum(
+                    1 for ln in lines if _LIST_ITEM_RE.match(ln)
+                )
+                ratio = list_lines / len(lines)
+                threshold = float(ld.get("threshold_ratio", 0.5))
+                if ratio > threshold:
+                    weight = int(ld.get("weight", 5))
+                    out.append(Violation(
+                        category="structural_rules", rule="list_density",
+                        weight=weight, count=list_lines,
+                        sample=f"{list_lines}/{len(lines)} lines are list items ({ratio:.0%} > {threshold:.0%})",
+                        threshold=int(threshold * 100), score=weight,
+                    ))
+    return out
+
+
+def _coef_of_variation(values: Sequence[float]) -> float:
+    """Population CV, with a zero-mean guard that returns 0.0 so the
+    caller's threshold comparison never divides by zero.
+    """
+    if len(values) < 2:
+        return 0.0
+    m = mean(values)
+    if m == 0:
+        return 0.0
+    return pstdev(values) / m
+
+
+def _check_rhythm(text: str, rules: dict) -> tuple[list[Violation], dict]:
+    """Run the four ``rhythm_rules`` metrics.
+
+    Returns ``(violations, stats)`` — stats always populated (sent_cv,
+    short_ratio, para_cv, opener_ratio) regardless of whether the
+    metric crossed a threshold, so callers can show the numbers even
+    when no rule fired.
+    """
+    out: list[Violation] = []
+    stats: dict = {}
+
+    sents = _sentences(text)
+    sent_wc = [len(_tokens(s)) for s in sents]
+    sent_wc = [w for w in sent_wc if w > 0]
+
+    # sentence_length_cv + short_sentence_ratio share the sentence list.
+    if len(sent_wc) >= 5:
+        s_cv = _coef_of_variation(sent_wc)
+        stats["sentence_cv"] = round(s_cv, 3)
+        cv_conf = rules.get("sentence_length_cv")
+        if isinstance(cv_conf, dict):
+            ai_thr = float(cv_conf.get("ai_threshold", 0.35))
+            min_sents = int(cv_conf.get("min_sentences", 5))
+            if len(sent_wc) >= min_sents and s_cv < ai_thr:
+                weight = int(cv_conf.get("weight", 10))
+                out.append(Violation(
+                    category="rhythm_rules", rule="sentence_length_cv",
+                    weight=weight, count=1,
+                    sample=f"sentence CV={s_cv:.2f} < {ai_thr} (uniform sentence lengths)",
+                    threshold=int(ai_thr * 100), score=weight,
+                ))
+
+        sr_conf = rules.get("short_sentence_ratio")
+        if isinstance(sr_conf, dict) and len(text) >= int(
+            sr_conf.get("min_text_length", 300)
+        ):
+            short_ratio = sum(1 for w in sent_wc if w < 6) / len(sent_wc)
+            stats["short_sentence_ratio"] = round(short_ratio, 3)
+            ai_thr = float(sr_conf.get("ai_threshold", 0.02))
+            if short_ratio < ai_thr:
+                weight = int(sr_conf.get("weight", 4))
+                out.append(Violation(
+                    category="rhythm_rules", rule="short_sentence_ratio",
+                    weight=weight, count=1,
+                    sample=f"short-sentence ratio={short_ratio:.1%} < {ai_thr:.1%}",
+                    threshold=int(ai_thr * 100), score=weight,
+                ))
+
+    paras = _paragraphs(text)
+    # paragraph_uniformity + para_opening_enumeration share the paragraph list.
+    pu_conf = rules.get("paragraph_uniformity")
+    if (
+        isinstance(pu_conf, dict)
+        and len(paras) >= int(pu_conf.get("min_paragraphs", 3))
+    ):
+        plens = [len(p) for p in paras]
+        p_cv = _coef_of_variation(plens)
+        stats["paragraph_cv"] = round(p_cv, 3)
+        ai_thr = float(pu_conf.get("ai_threshold", 0.3))
+        if p_cv < ai_thr:
+            weight = int(pu_conf.get("weight", 6))
+            out.append(Violation(
+                category="rhythm_rules", rule="paragraph_uniformity",
+                weight=weight, count=1,
+                sample=f"paragraph-length CV={p_cv:.2f} < {ai_thr} (uniform paragraphs)",
+                threshold=int(ai_thr * 100), score=weight,
+            ))
+
+    po_conf = rules.get("para_opening_enumeration")
+    if isinstance(po_conf, dict) and paras:
+        try:
+            pat = re.compile(po_conf.get("pattern", r"(?!)"), re.IGNORECASE)
+        except re.error:
+            pat = re.compile(r"(?!)")
+        opener_hits = sum(1 for p in paras if pat.match(p))
+        stats["para_opener_count"] = opener_hits
+        hard = int(po_conf.get("hard_threshold", 2))
+        if opener_hits > hard:
+            weight = int(po_conf.get("weight", 5))
+            overshoot = opener_hits - hard
+            out.append(Violation(
+                category="rhythm_rules", rule="para_opening_enumeration",
+                weight=weight, count=opener_hits,
+                sample=f"{opener_hits} paragraphs open with enumeration/transition markers (>{hard})",
+                threshold=hard, score=overshoot * weight,
+            ))
+
+    return out, stats
+
+
+def _check_fake_human(text: str, rules: dict) -> list[Violation]:
+    """Run ``fake_human`` regex rules. Each rule is independent; each
+    hit adds ``weight`` to the score up to the ``hard_threshold``,
+    then ``(count - hard) * weight`` for overshoot.
+    """
+    out: list[Violation] = []
+    for rule_name, conf in rules.items():
+        if rule_name.startswith("_") or not isinstance(conf, dict):
+            continue
+        patterns = conf.get("patterns", [])
+        if not patterns:
+            continue
+        weight = int(conf.get("weight", 1))
+        total_count = 0
+        sample = ""
+        for pat in patterns:
+            try:
+                matches = list(re.finditer(pat, text, re.IGNORECASE))
+            except re.error:
+                continue
+            if matches and not sample:
+                sample = matches[0].group(0)
+            total_count += len(matches)
+        if total_count == 0:
+            continue
+        hard = conf.get("hard_threshold")
+        soft = conf.get("soft_threshold")
+        s = _apply_threshold_ladder(total_count, weight, soft, hard)
+        out.append(Violation(
+            category="fake_human", rule=rule_name, weight=weight,
+            count=total_count, sample=sample,
+            threshold=hard if hard is not None else soft, score=s,
+        ))
+    return out
+
+
+def _check_soul_signals(text: str, rules: dict) -> list[Violation]:
+    """Penalty for *missing* human fingerprints.
+
+    Unlike every other rule category, soul_signals fires when the
+    matched count is BELOW ``min_threshold``. The penalty is
+    ``(min_threshold - count) * weight`` — so fully-absent signals
+    score proportionally higher than just-under-threshold ones.
+
+    Case-sensitivity is per-rule via the ``case_insensitive`` conf
+    flag (default ``True``). ``concrete_specifics`` keeps it ``False``
+    because its regex genuinely relies on Title-Case matching to find
+    proper nouns — with IGNORECASE it would match every lowercase
+    word pair and never fire.
+    """
+    out: list[Violation] = []
+    n_chars = len(text)
+    for rule_name, conf in rules.items():
+        if rule_name.startswith("_") or not isinstance(conf, dict):
+            continue
+        min_len = int(conf.get("min_text_length", 0))
+        if n_chars < min_len:
+            continue
+        pattern = conf.get("pattern", "")
+        if not pattern:
+            continue
+        flags = re.IGNORECASE if conf.get("case_insensitive", True) else 0
+        try:
+            hits = len(re.findall(pattern, text, flags))
+        except re.error:
+            continue
+        min_thr = int(conf.get("min_threshold", 1))
+        if hits >= min_thr:
+            continue
+        weight = int(conf.get("weight", 5))
+        deficit = min_thr - hits
+        out.append(Violation(
+            category="soul_signals", rule=rule_name, weight=weight,
+            count=hits, sample=f"found {hits} signal(s), need >= {min_thr}",
+            threshold=min_thr, score=deficit * weight,
+        ))
+    return out
+
+
 def score(
     text: str, *, has_notes: bool = False, skip_codeblocks: bool = True
 ) -> Score:
     """Score ``text`` against the English rule library.
 
+    Runs in six passes (M3 + M4):
+
+    1. ``blacklist_words``      — lexical tells (M3)
+    2. ``blacklist_phrases``    — multi-word tells (M3)
+    3. ``structural_rules``     — heading + list density (M4)
+    4. ``rhythm_rules``         — sentence/paragraph CV + opener enumeration (M4)
+    5. ``fake_human``           — pseudo-personal-experience regexes (M4)
+    6. ``soul_signals``         — penalty for MISSING human fingerprints (M4)
+
     Args:
         text: The text to score.
-        has_notes: Reserved for M4's ``fake_human`` rules — when the
-            author has a real ``notes.md`` they're allowed to use
-            first-person experience phrasing the rule would otherwise
-            penalise. M3 doesn't enforce ``fake_human`` so the flag
-            currently affects nothing.
+        has_notes: When ``True``, the ``fake_human`` pass is skipped
+            (we trust that a writer with a real ``notes.md`` is
+            reporting genuine first-person experience). The rhythm /
+            structural / soul_signals passes still run.
         skip_codeblocks: Strip fenced + inline code before matching.
             ON by default so a tutorial that legitimately discusses
             ``utilize()`` doesn't get penalised.
@@ -291,6 +544,7 @@ def score(
 
     violations: list[Violation] = []
 
+    # 1. Lexical
     for rule_name, conf in rules.get("blacklist_words", {}).items():
         if rule_name.startswith("_") or not isinstance(conf, dict):
             continue
@@ -298,12 +552,31 @@ def score(
         if v is not None:
             violations.append(v)
 
+    # 2. Phrases
     for rule_name, conf in rules.get("blacklist_phrases", {}).items():
         if rule_name.startswith("_") or not isinstance(conf, dict):
             continue
         v = _check_phrase_rule(body, rule_name, conf)
         if v is not None:
             violations.append(v)
+
+    # 3. Structural (heading_density, list_density)
+    violations.extend(_check_structural(body, rules.get("structural_rules", {})))
+
+    # 4. Rhythm (sentence + paragraph CV, short-ratio, opener enumeration)
+    rhythm_vios, rhythm_stats = _check_rhythm(body, rules.get("rhythm_rules", {}))
+    violations.extend(rhythm_vios)
+
+    # 5. Fake-human — skipped when has_notes=True (author's first-person
+    #    claims are corroborated by their notes.md in that case).
+    fake_skipped = False
+    if not has_notes:
+        violations.extend(_check_fake_human(body, rules.get("fake_human", {})))
+    else:
+        fake_skipped = True
+
+    # 6. Soul signals — penalty for missing human fingerprints.
+    violations.extend(_check_soul_signals(body, rules.get("soul_signals", {})))
 
     raw = sum(v.score for v in violations)
     # Length-normalise: every 3 000 characters is one "unit" of text.
@@ -312,13 +585,14 @@ def score(
     norm_factor = max(1.0, len(body) / 3000)
     total = min(100.0, raw / norm_factor)
 
-    stats = {
+    stats: dict = {
         "rule_set_version": str(rules.get("_meta", {}).get("version", "unknown")),
         "rule_count_evaluated": len(violations),
     }
+    stats.update(rhythm_stats)
+    if fake_skipped:
+        stats["fake_human_check"] = "skipped (has_notes=True)"
     if has_notes:
-        # M4 will use this to relax fake_human checks; meanwhile we
-        # surface the flag so debugging output is self-documenting.
         stats["has_notes"] = True
 
     return Score(

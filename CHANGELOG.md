@@ -9,6 +9,54 @@ milestone (M1, M2, ...).
 
 ## [Unreleased]
 
+### M4 — Structural + rhythm + fake-human + soul signals (in progress)
+
+- **10 new rules** across the four remaining rule buckets in
+  ``humanize_en/_lang/en/data/rules.json`` (bumped to v0.4.0):
+  - ``structural_rules`` (2): ``heading_density``, ``list_density``.
+  - ``rhythm_rules`` (4): ``sentence_length_cv``,
+    ``short_sentence_ratio``, ``paragraph_uniformity``,
+    ``para_opening_enumeration``.
+  - ``fake_human`` (2): ``vague_personal_experience``,
+    ``generic_authority_claim`` — skipped when ``has_notes=True``.
+  - ``soul_signals`` (2): ``concrete_specifics``, ``contrarian_hinge``
+    — *penalty for absence* (proper nouns / numbers / dates missing,
+    or argumentative hinges missing).
+- **Data-driven thresholds** — added
+  ``scripts/calibrate_rhythm.py`` that measures sentence-CV,
+  short-sentence ratio, paragraph-CV, and paragraph-opener ratio
+  distributions on HC3-en. Reported p10-p90 per side for 85k
+  answers. Thresholds baked into rules.json:
+  - sentence_cv < 0.35 (human p25=0.35 vs AI p75=0.42)
+  - paragraph_cv < 0.30 (human p25=1.78 vs AI p75=0.36)
+  - short_ratio < 0.02 (AI p75=0.00, human p75=0.14)
+  All thresholds can be edited in rules.json without code changes.
+- **Detector pipeline extended** (``humanize_en/_lang/en/detector.py``)
+  from 2 passes to 6:
+  1. ``blacklist_words`` (M3)
+  2. ``blacklist_phrases`` (M3)
+  3. ``_check_structural`` — heading & list density (M4)
+  4. ``_check_rhythm`` — sentence/paragraph CV + opener enumeration,
+     populates stats dict with the measured metrics regardless of
+     whether a rule fires (M4)
+  5. ``_check_fake_human`` — regex rules, skipped when
+     ``has_notes=True`` (M4)
+  6. ``_check_soul_signals`` — penalty for missing signals; per-rule
+     ``case_insensitive`` flag so ``concrete_specifics`` can keep
+     its Title-Case regex semantics (M4)
+- Shared the engine tokeniser (``_tokens`` / ``_sentences`` /
+  ``_paragraphs`` from ``_ngram_engine``) with the detector so rhythm
+  rules see the exact same structure the ngram engine sees — no
+  drift risk at the next tokenisation tweak.
+- Added 21 new tests (``tests/test_rhythm_and_signals.py``):
+  rule-shape guards, per-rule firing for each of the 10 M4 rules,
+  ``has_notes`` gating, soul-signal false-positive prevention on
+  concrete text, rhythm-metric stats population, and the key
+  integration test that an AI essay dodging all M3 lexical rules
+  still scores non-trivially via M4.
+- Total test count: **75** (16 protocol + 14 ngram + 24 M3 detector
+  + 21 M4), 91% coverage, ruff/mypy clean.
+
 ### M3 — Lexical + phrase rules (in progress)
 
 - Added ``humanize_en/_lang/en/data/rules.json`` (v0.3.0) with
