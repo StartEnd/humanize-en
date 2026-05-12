@@ -31,10 +31,16 @@ classifier promoted `2 - Pre-Alpha → 3 - Alpha`.
   - The `--lang zh|en` switch is **gone** (EN's shims pin
     `lang="en"` by construction; the dispatch lives in the
     *core* CLI, which is multi-language by design).
-  - `humanize-en ui` boots `humanize_core.web.app:app` because
-    the EN plugin doesn't ship its own web app — installing
-    `humanize-en[ui]` pulls `humanize-core[ui]`, and the core
-    UI auto-detects every registered profile (including EN).
+  - `humanize-en ui` boots `humanize_core.web.app:app` as a
+    **multi-language JSON API server** (no HTMX UI yet — that
+    is plan-M11). Today, `GET /` returns 404; the working
+    surface is `/api/detect`, `/api/polish`, `/api/judge`,
+    `/api/providers`, `/api/languages`, and `/health`, all
+    routed by the `lang` form field so the EN profile lights
+    up automatically once `humanize-en` is installed.
+    `tests/test_ui_routes.py` pins this contract so a future
+    "I added an HTMX route but forgot the templates" mistake
+    is caught at CI time.
   - Auto-loads `./.env` and `~/.humanize-en.env`; opt out with
     `HUMANIZE_EN_NO_DOTENV=1`.
 - **`humanize_en.cli.__main__`** — `python -m humanize_en.cli`

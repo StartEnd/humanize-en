@@ -52,6 +52,11 @@ dev = [
     "ruff>=0.7.0",
     "mypy>=1.10",
     "httpx>=0.27",  # for FastAPI TestClient
+    # Pull the [ui] extra into the dev env so tests/test_ui_routes.py
+    # actually runs in CI rather than skipping when fastapi / jinja2
+    # are absent. The user-facing [ui] extra still controls install
+    # size for end users; this only affects local dev + CI.
+    "humanize-core[ui]>=0.1.0a1",
 ]
 # `build-data` extra (M2): training script for the n-gram freq table
 # + LR calibration. Build-time only; never imported at runtime by

@@ -7,9 +7,11 @@ differences vs the ZH CLI are:
 - The ``--lang`` flag is **gone**: the EN plugin is mono-language by
   construction (its shims pin ``lang="en"``). To polish Chinese,
   install ``humanize-zh``.
-- ``humanize-en ui`` boots :mod:`humanize_core.web.app` (the core
-  framework's UI is multi-language; once ``humanize-en`` is
-  installed, English profiles light up automatically).
+- ``humanize-en ui`` boots :mod:`humanize_core.web.app` as a
+  **JSON-only API server** (the multi-language HTMX UI is
+  plan-M11). Once ``humanize-en`` is installed, the EN profile is
+  selectable via the ``lang`` form field on every ``/api/...``
+  endpoint.
 - ``.humanize-en.env`` (or ``HUMANIZE_EN_NO_DOTENV=1`` to opt out).
 
 Usage::
@@ -19,7 +21,7 @@ Usage::
     humanize-en judge  FILE [-o OUT] [--writer NAME] [--judge NAME] [--json]
                             [--allow-self-judge]
     humanize-en providers                  # list auto-detectable providers
-    humanize-en ui                          # launch the core web UI
+    humanize-en ui                          # multi-lang JSON API server
 
 Global options:
     -v/--verbose     INFO-level logs
@@ -208,20 +210,31 @@ def cmd_judge(args: argparse.Namespace) -> int:
 # ─── ui / providers ─────────────────────────────────────────────────────────
 
 def cmd_ui(args: argparse.Namespace) -> int:
-    """Launch the FastAPI dev server shipped with ``humanize-core[ui]``.
+    """Launch the FastAPI JSON-API server shipped with ``humanize-core[ui]``.
 
-    The EN plugin does **not** ship its own web app — installing
-    ``humanize-en[ui]`` pulls in ``humanize-core[ui]``, and the core
-    UI auto-detects every registered language profile (including EN).
+    The EN plugin does **not** ship its own web app or HTMX templates
+    yet (HTMX UI for EN is plan-M11). Today, ``humanize-en ui`` boots
+    the multi-language JSON API factory in :mod:`humanize_core.web.app`,
+    which exposes ``/api/detect``, ``/api/polish``, ``/api/judge``,
+    ``/api/providers`` and ``/api/languages`` — all routed via the
+    ``lang`` form field so the EN profile lights up automatically
+    once ``humanize-en`` is installed. ``GET /`` returns 404 by
+    design until M11 wires templates in via
+    :func:`humanize_core.web.app.create_app`'s ``templates_dir`` arg.
     """
     try:
         import uvicorn
     except ImportError:
         _die(
-            "the 'ui' extra is required to run the web UI. "
+            "the 'ui' extra is required to run the JSON API server. "
             "Install with: pip install 'humanize-en[ui]'"
         )
-    print(f"humanize-en UI: http://{args.host}:{args.port}/")
+    print(f"humanize-en JSON API: http://{args.host}:{args.port}/")
+    print(
+        "  endpoints: /api/detect /api/polish /api/judge "
+        "/api/providers /api/languages /health"
+    )
+    print("  (HTMX UI for English is plan-M11; today GET / returns 404)")
     uvicorn.run(
         "humanize_core.web.app:app",
         host=args.host,
@@ -263,7 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  humanize-en polish article.md -o polished.md --provider deepseek\n"
             "  humanize-en judge  article.md --writer deepseek --judge anthropic\n"
             "  humanize-en providers\n"
-            "  humanize-en ui\n"
+            "  humanize-en ui                # JSON API (HTMX UI is plan-M11)\n"
         ),
     )
     p.add_argument("--version", action="version", version=f"humanize-en {__version__}")
@@ -320,8 +333,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("providers", help="list auto-detectable providers")
     sp.set_defaults(func=cmd_providers)
 
-    # ui (FastAPI dev server, shipped with humanize-core[ui])
-    sp = sub.add_parser("ui", help="launch the web UI (requires the 'ui' extra)")
+    # ui (FastAPI dev server, shipped with humanize-core[ui]).
+    # Today this is JSON-only — HTMX UI for EN is plan-M11.
+    sp = sub.add_parser(
+        "ui",
+        help="launch the multi-language JSON API server (HTMX UI is plan-M11)",
+    )
     sp.add_argument("--host", default="127.0.0.1")
     sp.add_argument("--port", type=int, default=8765)
     sp.add_argument(

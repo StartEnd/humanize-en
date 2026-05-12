@@ -1202,6 +1202,7 @@ build-data = [
 ]
 dev = [
     { name = "httpx" },
+    { name = "humanize-core", extra = ["ui"] },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -1227,6 +1228,7 @@ requires-dist = [
     { name = "humanize-core", editable = "../humanize-core" },
     { name = "humanize-core", extras = ["anthropic"], marker = "extra == 'anthropic'", editable = "../humanize-core" },
     { name = "humanize-core", extras = ["openai"], marker = "extra == 'openai'", editable = "../humanize-core" },
+    { name = "humanize-core", extras = ["ui"], marker = "extra == 'dev'", editable = "../humanize-core" },
     { name = "humanize-core", extras = ["ui"], marker = "extra == 'ui'", editable = "../humanize-core" },
     { name = "humanize-en", extras = ["openai", "anthropic", "ui"], marker = "extra == 'all'" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },

@@ -557,10 +557,97 @@ v0.1 release.
 | **M8** | **Benchmark suite + gates** | 1 day | `make bench` runs §7.1 Binoculars-drop gate locally; ≥80% of 100 RAID-news samples drop by ≥0.3. BERTScore-F1 ≥ 0.85. Results written to `docs/benchmarks.md`. |
 | **M9** | **Docs + examples + CHANGELOG + README limitations block** | 0.5 day | Mirror `humanize-zh/examples/`. README has the §9 limitations block verbatim. `docs/rules.md` auto-generated from `rules.json`. |
 | **M10** | **PyPI release** | 0.5 day | Build wheel, TestPyPI dry-run, fresh-venv `pip install humanize-en` → CLI works. `pip install humanize-en[perplexity]` adds Binoculars tier. |
+| **M11** | **HTMX web UI for EN (multi-language template kit)** | 1 day | `humanize-en ui` serves a working HTMX single-page UI on `GET /`. `tests/test_ui_routes.py` flips from "no HTMX routes" assertions to positive checks on `/htmx/{detect,polish,oneshot,oneshot-loop,judge}`. Templates are EN-localised (no Chinese strings, no `朱雀检测` references) and built on top of `humanize_core.web.app.create_app(templates_dir=…)` rather than humanize-zh's standalone `web/app.py` (which predates the multi-language factory). |
 
-**Total: ~7.5 dev days.** Wall-clock 2 weeks with overrun budget
-on M2 (corpus tooling sticky) and M8 (Binoculars install on
-non-GPU machines is fiddly).
+**Total: ~8.5 dev days** including M11. Wall-clock 2 weeks with
+overrun budget on M2 (corpus tooling sticky), M8 (Binoculars
+install on non-GPU machines is fiddly), and M11 (template
+translation + Tailwind/HTMX wiring is more UX work than backend).
+
+### M11 design notes (discovered during M10 verification)
+
+M10's verification step booted `humanize-en ui` and discovered
+that `humanize_core/web/app.py:506` defines its module-level
+``app = create_app()`` with **no** ``templates_dir``. As a result
+the HTMX endpoints and ``GET /`` are deliberately not
+registered, and ``humanize-en ui`` currently serves a JSON-only
+API. The README + CHANGELOG were corrected to match reality
+(see CHANGELOG `M10` amendment + `tests/test_ui_routes.py` for
+the pinned contract); M11 closes the gap.
+
+**Scope.**
+
+1. **`humanize_en/web/{app.py, templates/, __main__.py}`** — new
+   subpackage. ``app.py`` is a ~30-line shim that calls
+   ``humanize_core.web.app.create_app(templates_dir=THIS/"templates")``
+   and exposes the resulting ``FastAPI`` instance at module
+   level. ``__main__.py`` mirrors ``humanize_zh.web.__main__``
+   so ``python -m humanize_en.web`` works for local dev. CLI
+   ``cmd_ui`` repoints from ``humanize_core.web.app:app`` to
+   ``humanize_en.web.app:app``.
+2. **Templates** — port the nine humanize-zh templates
+   (`base.html`, `index.html`, plus seven ``_*_result.html``
+   fragments). Three classes of change per file:
+   - **Copy translation.** Every Chinese string in the UI
+     chrome (`30秒上手 → 30-second start`, `LLM 配置 → LLM
+     setup`, button labels, error messages, etc.). Aim for a
+     concise, technical voice — not marketing-speak — to
+     match the README tone.
+   - **Service references.** Drop the Chinese-only AI-detection
+     services (`朱雀检测 https://matrix.tencent.com/ai-detect/`)
+     in favour of EN-applicable equivalents:
+     [GPTZero](https://gptzero.me/),
+     [ZeroGPT](https://www.zerogpt.com/), and a short note
+     pointing power users at Binoculars (links to our own
+     `[perplexity]` extra section in the README).
+   - **`lang` form field.** humanize-zh's standalone app
+     hard-codes ``lang="zh"`` in every form. The core factory
+     uses ``lang`` as a routed form field — for the EN plugin
+     the templates can hard-code ``"en"`` (matching the EN
+     plugin's mono-language stance) **or** read the registered
+     codes from ``/api/languages`` and render a switcher. v0.1
+     ships the hard-coded variant; a future M12 could merge
+     both plugins' templates into a single multi-language UI
+     kit hosted in humanize-core.
+3. **Test surface.** Flip ``tests/test_ui_routes.py``:
+   - Remove ``test_no_unexpected_htmx_routes_today`` /
+     ``test_root_returns_404_until_m11``.
+   - Add ``test_root_returns_200_html`` (asserts
+     ``Content-Type: text/html`` and the page title contains
+     `humanize-en`).
+   - Add ``test_htmx_detect_returns_html_fragment`` (POSTs a
+     trivial article, asserts the fragment includes a rule
+     score) — uses ``llm.use_callable`` if any HTMX endpoint
+     needs an LLM call.
+4. **Build manifest.** ``pyproject.toml`` needs no force-include
+   tweaks — Jinja templates under ``humanize_en/web/templates/``
+   ride along with the package as long as we keep an
+   ``__init__.py`` in the templates dir (matches how
+   humanize-zh ships them). Verify with
+   ``unzip -l dist/*.whl | grep templates`` after ``uv build``.
+
+**Decision points to lock before starting M11.**
+
+- **Template dialect.** Tailwind 3 via CDN (matches humanize-zh)
+  vs Tailwind 4 (newer, supports the ``@theme`` directive). v0.1
+  recommendation: stay on Tailwind 3 CDN for one-file deploys;
+  retire to local build only if we need to vendor the CSS for
+  air-gapped users.
+- **Service references update cadence.** GPTZero / ZeroGPT may
+  change pricing or shut down. Decision: hard-code the URLs but
+  add a one-line ``<!-- last verified YYYY-MM-DD -->`` Jinja
+  comment beside each link, and grep-able TODO so the next
+  README sweep can re-verify.
+- **Loading skeleton.** humanize-zh's ``_loading_skel.html`` is
+  particularly LLM-tuned (animated dots, Chinese hints). For EN
+  we keep the animated dots but drop the localised microcopy.
+
+**Exit criterion (single sentence).** ``humanize-en ui`` on a
+fresh ``pip install humanize-en[ui]`` venv serves a working
+English HTMX UI on ``GET /``, the detect / polish / judge
+forms all return HTML fragments with EN content, and the
+``test_ui_routes.py`` test module fully covers the new HTMX
+routes (no more ``_until_m11`` skips).
 
 ---
 
