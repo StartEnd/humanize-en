@@ -1,6 +1,6 @@
 [project]
 name = "humanize-en"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "English AI-text humanizer plugin for humanize-core — interpretable rule/ngram detector + LLM polish, complements Binoculars/Fast-DetectGPT"
 authors = [{ name = "song" }]
 readme = "README.md"
@@ -8,7 +8,7 @@ license = { text = "MIT" }
 requires-python = ">=3.10"
 keywords = ["ai-detection", "english", "humanize", "ngram", "llm", "binoculars", "raid"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -95,9 +95,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["humanize_en"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"humanize_en/_lang/en/data" = "humanize_en/_lang/en/data"
+# Note: ``_lang/en/data/`` is picked up automatically as a sub-package
+# of ``humanize_en`` — adding it to ``force-include`` (as an earlier
+# revision did) makes hatchling emit each *.json / *.json.gz file
+# twice into the wheel, ~doubling its size and producing
+# ``Duplicate name`` warnings at build time.
 
 [tool.ruff]
 line-length = 120

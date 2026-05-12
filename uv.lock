@@ -1176,7 +1176,7 @@ provides-extras = ["openai", "anthropic", "ui", "dev", "all"]
 
 [[package]]
 name = "humanize-en"
-version = "0.1.0a0"
+version = "0.1.0a1"
 source = { editable = "." }
 dependencies = [
     { name = "humanize-core" },

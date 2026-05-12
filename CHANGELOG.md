@@ -16,6 +16,76 @@ milestone (M1, M2, ...).
 > match the plan (Binoculars wrapper = plan-M7, Strength knob =
 > plan-M6) and left the earlier dev-history labels untouched.
 
+### M10 — CLI + LICENSE + TestPyPI release prep
+
+Closes plan-M10's *pre-PyPI hygiene* surface. The package now
+ships a real console script, an SPDX-discoverable MIT licence
+file, and a release runbook — everything required for a clean
+TestPyPI dry-run. Version bump `0.1.0a0 → 0.1.0a1` and dev-status
+classifier promoted `2 - Pre-Alpha → 3 - Alpha`.
+
+- **`humanize_en.cli`** — mirrors `humanize_zh.cli.main`'s
+  surface so contributors fluent in one plugin's CLI can read
+  the other without context-switching. Subcommands `detect /
+  polish / judge / providers / ui`. Differences vs the ZH CLI:
+  - The `--lang zh|en` switch is **gone** (EN's shims pin
+    `lang="en"` by construction; the dispatch lives in the
+    *core* CLI, which is multi-language by design).
+  - `humanize-en ui` boots `humanize_core.web.app:app` because
+    the EN plugin doesn't ship its own web app — installing
+    `humanize-en[ui]` pulls `humanize-core[ui]`, and the core
+    UI auto-detects every registered profile (including EN).
+  - Auto-loads `./.env` and `~/.humanize-en.env`; opt out with
+    `HUMANIZE_EN_NO_DOTENV=1`.
+- **`humanize_en.cli.__main__`** — `python -m humanize_en.cli`
+  works without the entry-point script being on PATH (useful
+  for editable installs and CI).
+- **`LICENSE`** — committed at repo root (MIT, matches
+  `humanize-core`). PyPI's "License" badge needs the file
+  present in the sdist; hatchling picks it up automatically
+  and writes it into `dist-info/licenses/LICENSE` inside the
+  wheel.
+- **`pyproject.toml` hygiene** — removed the redundant
+  `[tool.hatch.build.targets.wheel.force-include]` block that
+  was double-shipping every `_lang/en/data/*.json` file in the
+  wheel (~doubled the wheel size and produced `Duplicate name`
+  UserWarnings at build time). Hatchling already picks up
+  `_lang/en/data/` as a sub-package of `humanize_en`.
+- **`tests/test_cli.py`** — 24 tests covering subprocess
+  end-to-end (`--version`, `--help`, exit codes, missing-file
+  errors, providers listing with/without env vars,
+  detect-json) and in-process coverage of `cmd_detect /
+  cmd_polish / cmd_judge / build_parser` so coverage.py sees
+  every CLI line; plus three `_load_dotenv` unit tests.
+- **`tests/conftest.py`** — added `repo_root`, `ai_article_en`,
+  `fake_polish_fn`, `fake_judge_fn`, and an autouse
+  `_clear_llm_between_tests` fixture (kept the existing
+  `clean_registry`). All four matchers detect prompts emitted
+  by both `humanize_core.prompt.*_EN` and the plugin's own
+  `_lang/en/prompts.py` so future prompt-pack tweaks don't
+  silently turn the fakes into passthroughs.
+- **`README.md`** — replaced the "CLI pending" paragraph with
+  a real CLI quickstart subsection (detect / polish / judge /
+  providers / ui examples + `.env` notes); promoted the
+  top-of-file status line `Pre-alpha (M7) → Alpha (M10)`;
+  marked M10 ✅ in the milestone status table.
+- **`docs/release.md`** — new file. Step-by-step runbook for
+  cutting a TestPyPI dry-run, including the pre-release quirk
+  that `[tool.uv.sources]` references the sibling
+  `../humanize-core` working copy and what to do about it
+  while `humanize-core` is still local-only. Wheel manifest
+  sanity checks (`unzip -l … | grep _lang/en/data`),
+  throwaway-venv install smoke, TestPyPI install via
+  `--extra-index-url`, and post-release `.devN` version bump
+  procedure are all written down so the next release doesn't
+  require re-deriving them from scratch.
+- **Wheel smoke verified.** `uv build` produces a 3.27 MB
+  wheel (down from 6.6 MB after the force-include cleanup),
+  no warnings, all data files present exactly once. A
+  throwaway-venv install plus `humanize-en --version /
+  detect / providers` and a `from humanize_en import score`
+  smoke import all succeed against the built artefact.
+
 ### M8 — Benchmark suite + §7 gate harness
 
 Lands the gate **harness** for plan-M8. The §7.1 (Binoculars

@@ -84,7 +84,7 @@ from .prompt import (
     build_humanize_prompt,
 )
 
-__version__ = "0.1.0a0"
+__version__ = "0.1.0a1"
 
 # ── Auto-register the built-in EN profile on package import ─────────────
 #

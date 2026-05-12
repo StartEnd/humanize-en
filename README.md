@@ -1,6 +1,6 @@
 # humanize-en
 
-**Pre-alpha (M7 — Binoculars wrapper).** English AI-text humanizer
+**Alpha (M10 — PyPI release prep).** English AI-text humanizer
 plugin for [`humanize-core`](../humanize-core/). Sibling to
 [`humanize-zh`](../humanize-zh/). Roadmap and prior-art survey in
 [`docs/plan.md`](docs/plan.md).
@@ -18,7 +18,7 @@ Status by milestone (numbering matches `docs/plan.md` §10):
 | M7  | Optional Binoculars perplexity wrapper         | ✅ |
 | M9  | Examples + auto-generated rules docs           | ✅ |
 | M8  | Benchmark suite + §7 gates (structure + skip-marked numbers) | ✅ structure / 🟡 numbers pending GPU run |
-| M10 | PyPI release                                   | pending |
+| M10 | CLI + LICENSE + TestPyPI release prep          | ✅ |
 
 ## What this is (when finished, ~M10)
 
@@ -128,9 +128,40 @@ print(verdict["publishable"], verdict.get("rewrite_brief"))
 `postprocess_humanize` / `judge` / `iterative_polish` are all
 EN-defaulted thin shims over `humanize_core` — see
 `humanize_en/{postprocess,judge,iterative}.py` for the exact
-forwarding contract. The `humanize-en` standalone CLI is still
-pending (M10 / PyPI prep); for now use `python -m humanize_en.judge
-file.md` or the framework's multi-language CLI in `humanize-core`.
+forwarding contract.
+
+### CLI quickstart
+
+Installing the package wires up a `humanize-en` console script
+that mirrors `humanize-zh` (so any pipeline tooling you have for
+the ZH plugin works against EN by renaming the binary):
+
+```bash
+# Detection only — no LLM key required.
+humanize-en detect article.md
+humanize-en detect article.md --json     # machine-readable
+
+# LLM polish (strips AI tells). Auto-detects a provider from env vars
+# (OPENAI_API_KEY, ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, ...).
+humanize-en polish article.md -o polished.md
+humanize-en polish article.md --scene academic --provider anthropic
+
+# LLM final-review verdict (writer ≠ judge, collusion check enforced).
+humanize-en judge  article.md --writer openai --judge anthropic
+humanize-en judge  article.md --json -o review.json
+
+# Surface auto-detected providers.
+humanize-en providers
+
+# Launch the web UI shipped by humanize-core[ui] — see `humanize-en[ui]`.
+humanize-en ui --port 8765
+```
+
+The CLI auto-loads `./.env` and `~/.humanize-en.env` (skipped if
+`HUMANIZE_EN_NO_DOTENV=1` is set) so `OPENAI_API_KEY=…` in a
+project-local `.env` Just Works. `python -m humanize_en.cli`
+is the equivalent entry point if you prefer to skip the script
+stub.
 
 See [`examples/`](examples/) for four self-contained ~50-line
 scripts (detect-only, polish, iterative, prompt-injection),
@@ -213,7 +244,7 @@ This section is non-negotiable for v0.1 release. Verbatim:
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE) (added with first PyPI release).
+MIT. See [`LICENSE`](LICENSE).
 
 ## References
 
