@@ -48,6 +48,30 @@ milestone (M1, M2, ...).
 - Total test count: **89** (75 M4 + 14 M5), 91% coverage, ruff/mypy
   clean.
 
+#### M5 known limitations (verified by ``scripts/verify_e2e.py``)
+
+1. **Substring patterns are newline-naive.** Patterns like
+   ``"It is important to note that "`` won't strip the line-broken
+   form ``"It is important to note\nthat "`` that appears when AI
+   output has been wrapped at ~72 cols. Real ChatGPT output uses
+   long lines so this rarely matters in production; the polish LLM
+   handles the residual cases. Decided NOT to add per-pair
+   newline-variant explosion (would double the table for marginal
+   gain).
+2. **Replacements alone don't move the n-gram score.** End-to-end
+   verification on a heavy-AI 1063-char sample showed:
+   - rule score: 100 → 43 (-57 pts) ✓
+   - ngram score: 100 → 99.8 (barely) — substring substitution
+     preserves perplexity / burstiness, so the n-gram engine is
+     unimpressed.
+   This is by design: M5 hands the polish LLM cleaner inputs;
+   M6 prompts + LLM rewrite are what shift n-gram statistics.
+3. **End-to-end verification script** added at
+   ``scripts/verify_e2e.py``. No LLM key needed for layers 1-3;
+   layer 4 (real LLM polish) auto-skips when no API key is set.
+   Useful as a CI smoke test and for regression-checking after
+   future rule-set updates.
+
 ### M4 — Structural + rhythm + fake-human + soul signals (in progress)
 
 - **10 new rules** across the four remaining rule buckets in
