@@ -17,7 +17,7 @@ Status by milestone (numbering matches `docs/plan.md` §10):
 | M6  | Strength knob (low / medium / high)            | ✅ |
 | M7  | Optional Binoculars perplexity wrapper         | ✅ |
 | M9  | Examples + auto-generated rules docs           | ✅ |
-| M8  | Benchmark suite + §7.1 humanization gate       | pending |
+| M8  | Benchmark suite + §7 gates (structure + skip-marked numbers) | ✅ structure / 🟡 numbers pending GPU run |
 | M10 | PyPI release                                   | pending |
 
 ## What this is (when finished, ~M10)
@@ -133,10 +133,12 @@ pending (M10 / PyPI prep); for now use `python -m humanize_en.judge
 file.md` or the framework's multi-language CLI in `humanize-core`.
 
 See [`examples/`](examples/) for four self-contained ~50-line
-scripts (detect-only, polish, iterative, prompt-injection) and
+scripts (detect-only, polish, iterative, prompt-injection),
 [`docs/rules.md`](docs/rules.md) for the auto-generated rule
 reference (26 rules across 6 categories, with descriptions,
-weights, and sample patterns).
+weights, and sample patterns), and [`docs/benchmarks.md`](docs/benchmarks.md)
+for the §7 gate harness (structure verified; honest numbers
+require a Falcon-7B-equipped run — see plan-M8 status above).
 
 ## Optional: Binoculars perplexity signal (M7)
 

@@ -16,13 +16,103 @@ milestone (M1, M2, ...).
 > match the plan (Binoculars wrapper = plan-M7, Strength knob =
 > plan-M6) and left the earlier dev-history labels untouched.
 
+### M8 — Benchmark suite + §7 gate harness
+
+Lands the gate **harness** for plan-M8. The §7.1 (Binoculars
+score drop), §7.2 (BERTScore-F1 ≥ 0.85), and §7.3 (Flesch-Kincaid
+±2 grades) gates from `docs/plan.md` §7 are all wired up as
+pytest tests **and** as gate-runner functions inside the driver
+script. The §7.1 / §7.2 gates skip-mark cleanly when their
+optional GPU/PyPI deps are missing — pinning honest *numbers*
+needs a Falcon-7B-equipped run, which is the remaining v0.1
+work tracked under plan-M10's pre-release checklist.
+
+- **Bundled stub corpus** (`tests/bench/_samples.json`) — 12
+  hand-written AI-flavoured essays (60-180 words) across
+  news / blog / academic / business domains. Verified to fire
+  ≥ 5 violations and score ≥ 50 on the rule layer (the
+  `test_each_sample_fires_at_least_five_violations` /
+  `test_bundled_samples_fire_detector` invariants). Exists so
+  pipeline-structure tests can run without network or GPU.
+- **`tests/bench/_data.py`** — `load_samples(source, n, domain)`
+  helper. `source="bundled"` always works; `source="raid"` is a
+  `NotImplementedError` placeholder until the `raid-bench`
+  loader lands. Silent fallback to bundled is **deliberately
+  refused** because it would yield meaningless "RAID" numbers
+  in `docs/benchmarks.md`.
+- **`tests/bench/_readability.py`** — stdlib-only Flesch-Kincaid
+  Grade Level (~50 lines, vowel-group syllable heuristic with
+  silent-e + 'le' suffix corrections). Keeps the §7.3 gate
+  dep-free (no `textstat`, no `cmudict` download).
+- **Three gate tests under `tests/bench/`**:
+  - `test_binoculars_drop.py` — §7.1 primary gate. Skip-marks
+    when Binoculars isn't installed, no LLM provider is
+    configured, or `HUMANIZE_EN_SKIP_BENCH=1`. Pass criterion:
+    ≥ 80% of samples show `binoculars_score(after) - before ≥ 0.3`.
+  - `test_meaning_preservation.py` — §7.2 BERTScore-F1.
+    Skip-marks on missing `bert-score` or no LLM. Pass criterion:
+    mean F1 ≥ 0.85.
+  - `test_readability.py` — §7.3 mean |ΔFKGL| ≤ 2. Stdlib-only;
+    skip-marks only when no LLM is configured (the deterministic
+    cleanup fallback would make the gate trivially true).
+- **Always-run pipeline-structure tests**
+  (`tests/bench/test_pipeline_structure.py`, 11 tests) — sample
+  loader returns the right shape, every sample has a valid scene
+  tag, every sample fires the detector, polish returns the
+  documented `(text, after_score, before_score)` tuple, polish
+  doesn't *increase* the rule score on average. These run in CI
+  regardless of optional deps.
+- **`scripts/run_benchmarks.py`** driver — single entry point
+  that runs all three gates and writes `docs/benchmarks.md`.
+  Each gate degrades to `status="skipped"` (with a notes field
+  telling the reader exactly which install command unlocks it)
+  rather than crashing on missing deps. CLI flags:
+  - `--source bundled|raid` (default `bundled`)
+  - `--n N` (cap samples)
+  - `--out PATH` / `--json PATH` (alternate output paths)
+  - `--skip-llm` (force §7.1 / §7.2 to skip — useful for
+    standalone §7.3 runs)
+  - `--no-autodetect` (don't autodetect LLM providers from env;
+    used to produce the deterministic v0.1-alpha report
+    independent of the committer's keys).
+  Returns non-zero if any gate FAILED; skipped gates do not
+  count as failures.
+- **`docs/benchmarks.md`** — committed with the deterministic
+  `--no-autodetect` output (all three gates skipped with
+  install instructions for the reader). Future GPU-equipped
+  runs overwrite this with real numbers via `make bench`.
+- **Makefile**:
+  - `make bench` — run gates with autodetect on, rewrite the doc.
+  - `make bench-skip-llm` — regenerate the deterministic
+    committed version.
+- **17 new tests + 11 always-run structure tests = 28 net new
+  tests** (10 + 7 + 11):
+  - `tests/test_bench_helpers.py` (15) — sample-loader behaviour
+    (BenchSample shape, domain filter, `n` cap doesn't pad,
+    unknown source raises, dataclass is frozen) plus stdlib
+    readability primitives (word/sentence/syllable counts, FKGL
+    in plausible ranges, monotonicity under complexity).
+  - `tests/test_run_benchmarks_smoke.py` (8) — renderer produces
+    every required section header even when all gates skip;
+    per-sample table appears when data is present; status
+    emojis stable for badge-parsers; each gate-runner returns a
+    valid `GateResult`; CLI `--no-autodetect` end-to-end
+    produces a parseable report; committed `docs/benchmarks.md`
+    has every required section.
+  - `tests/bench/test_pipeline_structure.py` (11, always-run).
+  - `tests/bench/test_*` (3, skip-marked unless deps present).
+- **README** — M8 row marked "✅ structure / 🟡 numbers pending
+  GPU run" with a link to `docs/benchmarks.md` from the Usage
+  section. Honest about which gates run automatically and which
+  need a Falcon-7B install.
+- **252 tests pass + 3 skip** (under `HUMANIZE_EN_SKIP_BENCH=1`);
+  ruff clean; coverage 85%.
+
 ### M9 — Examples + auto-generated rules doc
 
 Closes plan-M9's exit criterion: `examples/` mirrors `humanize-zh`'s
 layout, README ships the §9 limitations block verbatim, and
-`docs/rules.md` is now auto-generated from `rules.json`. **plan-M8
-(benchmark suite + §7.1 humanization gate) is the only remaining
-v0.1 milestone** before PyPI release (plan-M10).
+`docs/rules.md` is now auto-generated from `rules.json`.
 
 - New `scripts/gen_rules_doc.py` — stdlib-only generator that
   renders `humanize_en/_lang/en/data/rules.json` (26 rules across

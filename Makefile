@@ -1,4 +1,4 @@
-.PHONY: help install test test-fast lint fmt typecheck cov build clean rules-doc rules-doc-check examples
+.PHONY: help install test test-fast lint fmt typecheck cov build clean rules-doc rules-doc-check examples bench bench-skip-llm
 
 PY := .venv/bin/python
 UV := uv
@@ -45,3 +45,9 @@ examples:  ## Run the no-LLM examples (01, 04) — fast smoke check.
 	$(PY) examples/01_detect_only.py
 	@echo
 	$(PY) examples/04_inject_rules_into_prompt.py
+
+bench:  ## Run the §7 benchmark gates and rewrite docs/benchmarks.md.
+	$(PY) scripts/run_benchmarks.py --source bundled
+
+bench-skip-llm:  ## Regenerate the deterministic v0.1-alpha docs/benchmarks.md (no LLM autodetect).
+	$(PY) scripts/run_benchmarks.py --source bundled --no-autodetect

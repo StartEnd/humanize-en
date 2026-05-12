@@ -1,0 +1,87 @@
+{
+  "_meta": {
+    "purpose": "Hand-written AI-flavoured essay snippets for plan-M8 pipeline structure tests. NOT for accuracy claims — these are deliberate caricatures so the rule + ngram detector reliably fires on them and the polish pass has visible work to do. For honest gate numbers, point the benchmark driver at RAID (Dugan et al., ACL 2024) via the [bench] extra; this bundled set exists so CI without GPU/network still exercises the full polish + score pipeline.",
+    "version": "0.1.0",
+    "count": 12,
+    "license": "CC0 — written by the humanize-en authors for testing.",
+    "design_rules": [
+      "Each sample is 60-180 words.",
+      "Each sample fires at least 5 distinct rule violations on the rule detector (verified by tests/bench/test_pipeline_structure.py).",
+      "Topics deliberately span news / academic / blog / business so the polish prompts (which select rule subsets by scene) all see relevant input."
+    ]
+  },
+  "samples": [
+    {
+      "id": "ai_news_01",
+      "domain": "news",
+      "scene": "analysis",
+      "text": "It is important to note that the recent paradigm shift in artificial intelligence will leverage cutting-edge technology to deliver unprecedented opportunities. Moreover, by harnessing next-generation capabilities, leading organizations are poised to redefine the competitive landscape. Furthermore, this transformative initiative will fundamentally reshape how businesses approach innovation. In conclusion, stakeholders across the industry must carefully consider the strategic implications of this groundbreaking development as it continues to evolve. Additionally, experts emphasize that proactive engagement with these emerging technologies will be crucial for sustained competitive advantage."
+    },
+    {
+      "id": "ai_news_02",
+      "domain": "news",
+      "scene": "analysis",
+      "text": "In today's rapidly evolving digital landscape, it's worth noting that comprehensive solutions are becoming increasingly essential. The seamless integration of cutting-edge methodologies enables organizations to unlock their full potential. Specifically, robust frameworks facilitate enhanced productivity across diverse stakeholder groups. To summarize, the synergistic alignment of innovative strategies with established best practices ensures sustainable growth. Ultimately, this holistic approach empowers teams to navigate complex challenges while maintaining operational excellence in an ever-changing market environment."
+    },
+    {
+      "id": "ai_blog_01",
+      "domain": "blog",
+      "scene": "blog",
+      "text": "Let's delve into the fascinating world of remote work. It's important to recognize that this paradigm shift has fundamentally transformed how we approach productivity. Moreover, by leveraging cutting-edge collaboration tools, teams can seamlessly coordinate across time zones. Furthermore, this comprehensive approach unlocks new opportunities for work-life balance. In essence, embracing this transformative methodology empowers individuals to redefine their professional journeys. Additionally, organizations that proactively adapt to these emerging trends position themselves for sustained success in the modern workforce ecosystem."
+    },
+    {
+      "id": "ai_blog_02",
+      "domain": "blog",
+      "scene": "blog",
+      "text": "In my personal experience, I've found that productivity tools can significantly enhance daily workflows. It's worth noting that the right combination of applications creates a seamless ecosystem. Specifically, by carefully selecting complementary tools, users can unlock unprecedented efficiency gains. Moreover, this strategic approach to digital workspace optimization fundamentally transforms how we approach our daily tasks. Trust me, the cumulative impact of these incremental improvements compounds over time. Ultimately, embracing this holistic methodology empowers professionals to achieve their full potential."
+    },
+    {
+      "id": "ai_academic_01",
+      "domain": "academic",
+      "scene": "academic",
+      "text": "It is important to note that this comprehensive analysis examines the multifaceted implications of artificial intelligence on contemporary educational paradigms. Furthermore, by leveraging cutting-edge methodological frameworks, researchers can systematically evaluate the transformative potential of these emerging technologies. Specifically, the integration of robust analytical approaches enables a holistic understanding of complex pedagogical phenomena. Moreover, this rigorous examination unlocks novel insights into how stakeholders can effectively navigate the evolving landscape. In conclusion, the findings underscore the critical importance of proactive engagement with these paradigm-shifting developments."
+    },
+    {
+      "id": "ai_academic_02",
+      "domain": "academic",
+      "scene": "academic",
+      "text": "## Introduction\n\nIn this comprehensive study, we delve into the intricate relationships between technological adoption and organizational change. It is important to note that our methodology leverages cutting-edge analytical frameworks.\n\n## Methodology\n\nFurthermore, by harnessing robust empirical approaches, we systematically evaluate multiple dimensions. Moreover, this holistic framework enables nuanced examination.\n\n## Findings\n\nSpecifically, our results reveal unprecedented insights. Additionally, the data substantiates our hypothesis. To summarize, these findings fundamentally transform our understanding of the phenomenon under investigation."
+    },
+    {
+      "id": "ai_business_01",
+      "domain": "business",
+      "scene": "essay",
+      "text": "Our cutting-edge solution leverages next-generation technology to deliver unprecedented value to stakeholders. It's important to note that this comprehensive platform empowers organizations to unlock their full potential. Furthermore, by harnessing the power of artificial intelligence, we enable seamless integration across diverse business functions. Moreover, this transformative approach fundamentally redefines competitive advantage in the modern marketplace. Additionally, our holistic methodology ensures robust scalability while maintaining operational excellence. In conclusion, forward-thinking enterprises that embrace this paradigm shift position themselves for sustained success."
+    },
+    {
+      "id": "ai_business_02",
+      "domain": "business",
+      "scene": "essay",
+      "text": "Strategic alignment with emerging market dynamics requires a multifaceted approach to organizational transformation. It is worth noting that successful enterprises proactively leverage cutting-edge methodologies to navigate complex challenges. Specifically, by harnessing comprehensive frameworks, leadership teams can systematically address operational inefficiencies. Furthermore, this paradigm shift enables organizations to unlock unprecedented opportunities for sustainable growth. Moreover, the integration of robust analytical capabilities empowers data-driven decision-making across all functional areas. Ultimately, this holistic approach delivers transformative value to stakeholders."
+    },
+    {
+      "id": "ai_blog_03",
+      "domain": "blog",
+      "scene": "blog",
+      "text": "It's worth noting that productivity is a multifaceted concept. Moreover, in today's fast-paced world, individuals face numerous challenges. Furthermore, the importance of time management cannot be overstated. Specifically, effective prioritization unlocks substantial benefits. Additionally, by leveraging proven techniques, professionals can optimize their workflows. In conclusion, embracing these comprehensive strategies empowers individuals to achieve their goals while maintaining work-life balance. Ultimately, the cumulative impact of these methodologies fundamentally transforms one's approach to daily productivity challenges."
+    },
+    {
+      "id": "ai_news_03",
+      "domain": "news",
+      "scene": "analysis",
+      "text": "## Overview\n\nThe announcement marks a significant milestone in the industry's evolution. It is important to note that this development represents a paradigm shift.\n\n## Implications\n\n- Stakeholders must adapt to changing dynamics\n- Organizations need to leverage cutting-edge approaches\n- Comprehensive strategies become essential\n- Robust frameworks enable seamless integration\n\nFurthermore, by harnessing emerging technologies, market leaders position themselves advantageously. Moreover, this transformative initiative unlocks unprecedented opportunities. In conclusion, proactive engagement with these developments will be crucial for sustained success."
+    },
+    {
+      "id": "ai_academic_03",
+      "domain": "academic",
+      "scene": "academic",
+      "text": "The proliferation of large language models has fundamentally transformed natural language processing research. It is important to note that these models leverage transformer architectures to achieve unprecedented performance. Furthermore, by harnessing massive datasets, researchers have systematically advanced the state of the art. Specifically, comprehensive benchmarks demonstrate the multifaceted capabilities of contemporary models. Moreover, this paradigm shift enables novel applications across diverse domains. Additionally, robust evaluation frameworks have emerged to assess these cutting-edge systems. In conclusion, the field continues to evolve at an accelerated pace."
+    },
+    {
+      "id": "ai_blog_04",
+      "domain": "blog",
+      "scene": "blog",
+      "text": "Let me share my comprehensive guide to maximizing your potential. It's worth noting that success requires a multifaceted approach. Trust me, by leveraging proven methodologies, you can unlock unprecedented growth in your career. Furthermore, this transformative framework empowers individuals to navigate complex challenges. Moreover, embracing cutting-edge strategies enables seamless transitions across diverse professional contexts. Specifically, the integration of robust techniques fundamentally redefines what's possible. In conclusion, proactive engagement with these holistic approaches positions you for sustained success in your journey."
+    }
+  ]
+}
