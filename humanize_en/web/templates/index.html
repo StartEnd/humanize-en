@@ -1,64 +1,406 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>humanize-en — M11 placeholder</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-           max-width: 720px; margin: 4em auto; padding: 0 1em; color: #111; line-height: 1.5; }
-    code { background: #f3f4f6; padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.95em; }
-    .muted { color: #6b7280; font-size: 0.9em; }
-    .ok { color: #047857; }
-    .pending { color: #b45309; }
-    ul { padding-left: 1.2em; }
-  </style>
-</head>
-<body>
-  <h1>humanize-en <span class="muted">v{{ version }}</span></h1>
+{% extends "base.html" %}
 
-  <p>
-    <strong class="pending">M11 step 1 — placeholder.</strong>
-    The HTMX endpoints are wired through
-    <code>humanize_core.web.app.create_app(templates_dir=…)</code>
-    but the polished single-page UI is still being ported from
-    <code>humanize-zh</code>. Track progress in
-    <code>docs/plan.md §M11</code>.
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold mb-1">humanize-en</h1>
+  <p class="text-sm text-slate-600 mb-3">
+    Strip AI tells from English text. Take an AI-written draft and rewrite it so it reads like a real person wrote it &mdash; for blog posts, essays, academic prose, or anything you'd rather not have flagged.
   </p>
 
-  <h3>What works today</h3>
-  <ul>
-    <li class="ok">The JSON API:
-      <code>/api/detect</code>, <code>/api/polish</code>,
-      <code>/api/judge</code>, <code>/api/providers</code>,
-      <code>/api/languages</code>, <code>/health</code>.
-    </li>
-    <li class="ok">HTMX endpoints reachable:
-      <code>POST /htmx/detect</code>, <code>/htmx/polish</code>,
-      <code>/htmx/oneshot</code>, <code>/htmx/oneshot-loop</code>,
-      <code>/htmx/judge</code>
-      (use the JSON API for now if you need the structured payloads).
-    </li>
-    <li class="ok">Language registry sees:
-      <code>{{ languages.codes|join(", ") }}</code>.
-    </li>
-  </ul>
+  <!-- 30-second start -->
+  <div class="rounded-lg border-2 border-blue-200 bg-blue-50 px-4 py-3 text-sm">
+    <div class="font-semibold text-blue-900 mb-2">30-second start</div>
+    <ol class="list-decimal list-inside text-slate-700 space-y-1">
+      <li>Paste your AI-written draft into the textbox below.</li>
+      <li>Click the <span class="px-1.5 py-0.5 rounded bg-blue-600 text-white font-mono text-xs">🚀 One-shot polish</span> blue button.</li>
+      <li>Wait 30-90 s. The polished text appears on the right &mdash; copy it out.</li>
+    </ol>
+    <div class="text-xs text-slate-500 mt-2 leading-relaxed">
+      Want to verify with an independent detector? Paste the result into
+      <a href="https://gptzero.me/" target="_blank" class="text-blue-700 hover:underline">GPTZero</a>
+      or <a href="https://www.zerogpt.com/" target="_blank" class="text-blue-700 hover:underline">ZeroGPT</a>.
+      Still flagged? Open <strong>Advanced</strong> below and use the
+      closed-loop rewriter (3 LLM rounds, harder push).
+    </div>
+  </div>
+</div>
 
-  <h3>What's next</h3>
-  <ul>
-    <li class="pending">M11 step 2 — port humanize-zh's templates verbatim.</li>
-    <li class="pending">M11 step 3 — translate UI copy + swap Chinese-only service refs.</li>
-    <li class="pending">M11 step 5 — repoint <code>humanize-en ui</code> to this app and ship.</li>
-  </ul>
-
-  <p class="muted">
-    Active LLM provider:
+<!-- Provider status banner (compact) -->
+<div class="mb-6 rounded-lg border border-slate-200 bg-white p-3 text-xs flex items-center justify-between">
+  <div>
+    <span class="text-slate-500">LLM:</span>
     {% if providers.active_will_be %}
-      <code>{{ providers.active_will_be }}</code> (auto-detected from env).
+      <span class="text-emerald-600 font-mono ml-1">{{ providers.active_will_be }}</span>
+      <span class="text-slate-400 ml-1">(loaded from .env)</span>
     {% else %}
-      <em>none</em> — set <code>OPENAI_API_KEY</code> / <code>ANTHROPIC_API_KEY</code> /
-      <code>DEEPSEEK_API_KEY</code> / etc. in a <code>.env</code> file or shell env.
+      <span class="text-amber-600 ml-1">not configured</span>
+      <span class="text-slate-400 ml-1">&mdash; set <code class="font-mono">OPENAI_API_KEY</code>, <code class="font-mono">ANTHROPIC_API_KEY</code>, or <code class="font-mono">DEEPSEEK_API_KEY</code> in <code class="font-mono">.env</code></span>
     {% endif %}
-  </p>
-</body>
-</html>
+  </div>
+  <details class="text-xs text-slate-400 cursor-pointer">
+    <summary class="hover:text-slate-700">all providers</summary>
+    <table class="mt-2 text-xs font-mono">
+      <thead><tr><th class="pr-4 text-left">provider</th><th class="pr-4 text-left">env</th><th class="text-left">status</th></tr></thead>
+      <tbody>
+        {% for row in providers.rows %}
+        <tr>
+          <td class="pr-4">{{ row.name }}</td>
+          <td class="pr-4">{{ row.env }}</td>
+          <td>{% if row.available %}<span class="text-emerald-600">✓</span>{% else %}<span class="text-slate-300">·</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</div>
+
+<!-- Tabs: default = oneshot only; advanced tabs hidden until toggled -->
+<div class="flex gap-1 mb-4 flex-wrap items-center" role="tablist">
+  <button class="tab-active px-4 py-2 rounded-t-lg text-sm font-medium" data-tab="oneshot" onclick="showTab('oneshot')">🚀 One-shot polish</button>
+  <button id="advanced-toggle" type="button"
+          class="ml-auto text-xs text-slate-500 hover:text-slate-900 cursor-pointer"
+          onclick="toggleAdvanced()">
+    <span id="advanced-toggle-label">Advanced ▼</span>
+  </button>
+</div>
+<div id="advanced-tabs" class="hidden flex gap-1 mb-4 flex-wrap" role="tablist">
+  <button class="tab-inactive px-4 py-2 rounded-t-lg text-sm font-medium" data-tab="loop" onclick="showTab('loop')">🔁 Closed-loop (3-round LLM)</button>
+  <button class="tab-inactive px-4 py-2 rounded-t-lg text-sm font-medium" data-tab="detect" onclick="showTab('detect')">🔍 Detection only</button>
+  <button class="tab-inactive px-4 py-2 rounded-t-lg text-sm font-medium" data-tab="polish" onclick="showTab('polish')">✨ Polish only (single round)</button>
+  <button class="tab-inactive px-4 py-2 rounded-t-lg text-sm font-medium" data-tab="judge"  onclick="showTab('judge')">⚖️ LLM final review</button>
+</div>
+<script>
+  function toggleAdvanced() {
+    var el = document.getElementById('advanced-tabs');
+    var lbl = document.getElementById('advanced-toggle-label');
+    if (el.classList.contains('hidden')) {
+      el.classList.remove('hidden');
+      el.classList.add('flex');
+      lbl.textContent = 'Collapse ▲';
+    } else {
+      el.classList.add('hidden');
+      el.classList.remove('flex');
+      lbl.textContent = 'Advanced ▼';
+    }
+  }
+</script>
+
+<div class="bg-white border border-slate-200 rounded-lg rounded-tl-none p-6">
+
+  <!-- ───────── One-shot ───────── -->
+  <section data-pane="oneshot">
+    <p class="text-sm text-slate-600 mb-3">Paste an article and the backend runs the full pipeline: detect → LLM polish → re-detect, all in one submit.</p>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <form hx-post="/htmx/oneshot"
+            hx-target="#oneshot-result"
+            hx-swap="innerHTML"
+            hx-indicator="#oneshot-loading"
+            hx-on::before-request="document.getElementById('oneshot-result').innerHTML=''; document.getElementById('oneshot-empty').style.display='none'"
+            class="space-y-4">
+        <textarea name="text" rows="18" required data-shared
+                  class="w-full font-mono text-sm border border-slate-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="Paste an English article..."></textarea>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <label class="block">
+            <span class="text-slate-700">scene</span>
+            <select name="scene" class="mt-1 block w-full border border-slate-300 rounded-md p-2">
+              <option value="analysis" selected>analysis</option>
+              <option value="essay">essay</option>
+              <option value="academic">academic</option>
+              <option value="blog">blog</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-slate-700">lang</span>
+            <select name="lang" class="mt-1 block w-full border border-slate-300 rounded-md p-2">
+              <option value="en" selected>en</option>
+            </select>
+          </label>
+        </div>
+        <label class="text-sm text-slate-700 flex items-start gap-2">
+          <input type="checkbox" name="force_llm" value="true" class="mt-1 rounded border-slate-300">
+          <span>
+            <strong>Force LLM call</strong>
+            <span class="text-xs text-slate-500 block">Default: skip LLM if the original score is already below the publish threshold (saves API spend). Check this to send to the LLM regardless of score.</span>
+          </span>
+        </label>
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-3 rounded-md">
+          🚀 One-shot polish (auto-detect + LLM rewrite)
+        </button>
+        <p class="text-xs text-slate-500">Submit, wait 30-90 s. The result appears on the right.</p>
+      </form>
+      <div>
+        <div id="oneshot-loading" class="htmx-indicator">{% include "_loading_skel.html" with context %}</div>
+        <div id="oneshot-result"></div>
+        <div id="oneshot-empty" class="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+          Result will show here after you submit.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── Iterative closed-loop ───────── -->
+  <section data-pane="loop" class="hidden">
+    <p class="text-sm text-slate-600 mb-3">
+      <strong>Multi-round closed loop:</strong> writer LLM rewrites → judge LLM scores + finds AI tells →
+      next round's writer targets those tells, until the judge score ≤ target.
+      Two LLM calls per round, default 3 rounds = 6 calls. Useful when third-party detectors
+      (GPTZero / Originality.ai) still flag the output.
+    </p>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <form hx-post="/htmx/oneshot-loop"
+            hx-target="#loop-result"
+            hx-swap="innerHTML"
+            hx-indicator="#loop-loading"
+            hx-on::before-request="document.getElementById('loop-result').innerHTML=''; var e=document.getElementById('loop-empty'); if(e) e.style.display='none'"
+            class="space-y-4">
+        <textarea name="text" rows="18" required data-shared
+                  class="w-full font-mono text-sm border border-slate-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="Paste an English article that needs an aggressive de-AI pass..."></textarea>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <label class="block">
+            <span class="text-slate-700">scene</span>
+            <select name="scene" class="mt-1 block w-full border border-slate-300 rounded-md p-2">
+              <option value="analysis" selected>analysis</option>
+              <option value="essay">essay</option>
+              <option value="academic">academic</option>
+              <option value="blog">blog</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-slate-700">lang</span>
+            <select name="lang" class="mt-1 block w-full border border-slate-300 rounded-md p-2">
+              <option value="en" selected>en</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <label class="block">
+            <span class="text-slate-700">rounds <span class="text-xs text-slate-500">(1-5)</span></span>
+            <input type="number" name="rounds" value="3" min="1" max="5"
+                   class="mt-1 block w-full border border-slate-300 rounded-md p-2">
+          </label>
+          <label class="block">
+            <span class="text-slate-700">target AI score <span class="text-xs text-slate-500">(stop when ≤)</span></span>
+            <input type="number" name="target_ai_score" value="30" min="0" max="100"
+                   class="mt-1 block w-full border border-slate-300 rounded-md p-2">
+          </label>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <label class="block">
+            <span class="text-slate-700">writer provider <span class="text-xs text-slate-500">(blank = default)</span></span>
+            <input type="text" name="writer" placeholder="e.g. openai"
+                   class="mt-1 block w-full border border-slate-300 rounded-md p-2 font-mono">
+          </label>
+          <label class="block">
+            <span class="text-slate-700">judge provider <span class="text-xs text-slate-500">(blank = default)</span></span>
+            <input type="text" name="judge" placeholder="e.g. anthropic"
+                   class="mt-1 block w-full border border-slate-300 rounded-md p-2 font-mono">
+          </label>
+        </div>
+        <label class="text-sm text-slate-700 flex items-start gap-2">
+          <input type="checkbox" name="allow_self_judge" value="true" class="mt-1 rounded border-slate-300">
+          <span>
+            <strong>Allow writer = judge (self-review)</strong>
+            <span class="text-xs text-slate-500 block">
+              If you only have one provider configured, you must check this (collusion risk &mdash; the UI flags self-judged runs ⚠️).
+              Recommended: add a second provider (e.g. <code>ANTHROPIC_API_KEY</code> alongside <code>OPENAI_API_KEY</code>) and leave the judge field blank so autodetect picks an independent one.
+            </span>
+          </span>
+        </label>
+        <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold px-4 py-3 rounded-md">
+          🔁 Run closed-loop rewrite (3 rounds ≈ 90-180 s)
+        </button>
+        <p class="text-xs text-slate-500">
+          Wall time ≈ rounds × 30-60 s. Don't close the page mid-run; each judge's tells drive the next polish round.
+        </p>
+      </form>
+      <div>
+        <div id="loop-loading" class="htmx-indicator">{% include "_loading_skel.html" with context %}</div>
+        <div id="loop-result"></div>
+        <div id="loop-empty" class="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+          Round-by-round trace + final rewrite will show here.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── Detect ───────── -->
+  <section data-pane="detect" class="hidden">
+    <p class="text-sm text-slate-600 mb-3">Pure-Python scoring, no LLM, &lt; 100 ms. Returns rule / n-gram / combined scores plus the list of triggered rules.</p>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <form hx-post="/htmx/detect"
+            hx-target="#detect-result"
+            hx-swap="innerHTML"
+            hx-indicator="#detect-loading"
+            hx-on::before-request="document.getElementById('detect-result').innerHTML=''; var e=document.getElementById('detect-empty'); if(e) e.style.display='none'"
+            class="space-y-4">
+        <textarea name="text" rows="18" required data-shared
+                  class="w-full font-mono text-sm border border-slate-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-slate-700"
+                  placeholder="Paste an English article..."></textarea>
+        <input type="hidden" name="lang" value="en">
+        <label class="text-sm text-slate-700 flex items-center gap-2">
+          <input type="checkbox" name="has_notes" value="true" class="rounded border-slate-300">
+          <span>has_notes (genuine first-person notes; relaxes the fake-human checks)</span>
+        </label>
+        <button type="submit" class="w-full bg-slate-900 hover:bg-slate-700 text-white text-sm font-medium px-4 py-2 rounded-md">
+          Run detection
+        </button>
+      </form>
+      <div>
+        <div id="detect-loading" class="htmx-indicator text-sm text-slate-500 py-4">running...</div>
+        <div id="detect-result"></div>
+        <div id="detect-empty" class="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+          Scores + triggered rules will show here.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── Polish ───────── -->
+  <section data-pane="polish" class="hidden">
+    <p class="text-sm text-slate-600 mb-3">Single LLM call that rewrites the article against the rule list. 30-90 s. The result appears on the right; you can pipe it to the next step.</p>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <form hx-post="/htmx/polish"
+            hx-target="#polish-result"
+            hx-swap="innerHTML"
+            hx-indicator="#polish-loading"
+            hx-on::before-request="document.getElementById('polish-result').innerHTML=''; var e=document.getElementById('polish-empty'); if(e) e.style.display='none'"
+            class="space-y-4">
+        <textarea name="text" rows="18" required data-shared
+                  class="w-full font-mono text-sm border border-slate-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-slate-700"
+                  placeholder="Paste the article you want polished..."></textarea>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <label class="block">
+            <span class="text-slate-700">scene</span>
+            <select name="scene" class="mt-1 block w-full border border-slate-300 rounded-md p-2">
+              <option value="analysis" selected>analysis</option>
+              <option value="essay">essay</option>
+              <option value="academic">academic</option>
+              <option value="blog">blog</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-slate-700">lang</span>
+            <select name="lang" class="mt-1 block w-full border border-slate-300 rounded-md p-2">
+              <option value="en" selected>en</option>
+            </select>
+          </label>
+        </div>
+        <label class="text-sm text-slate-700 flex items-start gap-2">
+          <input type="checkbox" name="force_llm" value="true" class="mt-1 rounded border-slate-300">
+          <span><strong>Force LLM call</strong> <span class="text-xs text-slate-500">&mdash; call the LLM even when the original is already below the publish threshold</span></span>
+        </label>
+        <button type="submit" class="w-full bg-slate-900 hover:bg-slate-700 text-white text-sm font-medium px-4 py-2 rounded-md">
+          Run LLM polish
+        </button>
+        <p class="text-xs text-slate-500">Submit, wait 30-90 s. The result appears on the right.</p>
+      </form>
+      <div>
+        <div id="polish-loading" class="htmx-indicator">{% include "_loading_skel.html" with context %}</div>
+        <div id="polish-result"></div>
+        <div id="polish-empty" class="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+          Polished article will show here.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── Judge ───────── -->
+  <section data-pane="judge" class="hidden">
+    <p class="text-sm text-slate-600 mb-3">Hire a separate LLM as an editor; it returns a 7-field structured review. Use different writer / judge providers for an independent verdict (avoids collusion). 30-60 s.</p>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <form hx-post="/htmx/judge"
+            hx-target="#judge-result"
+            hx-swap="innerHTML"
+            hx-indicator="#judge-loading"
+            hx-on::before-request="document.getElementById('judge-result').innerHTML=''; var e=document.getElementById('judge-empty'); if(e) e.style.display='none'"
+            class="space-y-4">
+        <textarea name="text" rows="18" required data-shared
+                  class="w-full font-mono text-sm border border-slate-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-slate-700"
+                  placeholder="Paste the article you want reviewed..."></textarea>
+        <input type="hidden" name="lang" value="en">
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <label class="block">
+            <span class="text-slate-700">writer (collusion check)</span>
+            <input type="text" name="writer" placeholder="optional, e.g. openai"
+                   class="mt-1 block w-full border border-slate-300 rounded-md p-2"/>
+          </label>
+          <label class="block">
+            <span class="text-slate-700">judge provider <span class="text-xs text-slate-500">(blank = active)</span></span>
+            <input type="text" name="judge" placeholder="optional, e.g. anthropic"
+                   class="mt-1 block w-full border border-slate-300 rounded-md p-2"/>
+          </label>
+          <label class="block col-span-2 flex items-center gap-2">
+            <input type="checkbox" name="allow_self_judge" value="true" class="rounded border-slate-300">
+            <span class="text-sm text-slate-700">allow self-judge (writer == judge, not recommended)</span>
+          </label>
+        </div>
+        <button type="submit" class="w-full bg-slate-900 hover:bg-slate-700 text-white text-sm font-medium px-4 py-2 rounded-md">
+          Run LLM final review
+        </button>
+      </form>
+      <div>
+        <div id="judge-loading" class="htmx-indicator">{% include "_loading_skel.html" with context %}</div>
+        <div id="judge-result"></div>
+        <div id="judge-empty" class="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+          Review report will show here.
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  // Tab switching with shared text propagation between panes
+  function showTab(name) {
+    // Sync the textarea text across panes (so user can flip tabs without losing input)
+    const panes = document.querySelectorAll('[data-pane]');
+    const currentText = (() => {
+      for (const p of panes) {
+        if (!p.classList.contains('hidden')) {
+          const ta = p.querySelector('textarea[data-shared]');
+          if (ta && ta.value) return ta.value;
+        }
+      }
+      return null;
+    })();
+    panes.forEach(p => p.classList.toggle('hidden', p.dataset.pane !== name));
+    document.querySelectorAll('[data-tab]').forEach(el => {
+      const active = el.dataset.tab === name;
+      el.classList.toggle('tab-active',   active);
+      el.classList.toggle('tab-inactive', !active);
+    });
+    if (currentText) {
+      const target = document.querySelector(`[data-pane="${name}"] textarea[data-shared]`);
+      if (target && !target.value) target.value = currentText;
+    }
+  }
+
+  // Pipe button: copy result text into a target tab and switch to it
+  function pipeTo(targetTab, text) {
+    showTab(targetTab);
+    const ta = document.querySelector(`[data-pane="${targetTab}"] textarea[data-shared]`);
+    if (ta) {
+      ta.value = text;
+      ta.focus();
+      ta.scrollIntoView({behavior: "smooth", block: "center"});
+    }
+  }
+
+  // Hide empty-state placeholder once HTMX swaps in real content
+  document.body.addEventListener("htmx:afterSwap", (e) => {
+    const id = e.target.id;
+    const empty = document.getElementById(id.replace("-result", "-empty"));
+    if (empty && e.target.innerHTML.trim()) empty.style.display = "none";
+  });
+  document.body.addEventListener("htmx:beforeRequest", (e) => {
+    const targetId = e.detail.target ? e.detail.target.id : null;
+    if (targetId) {
+      const empty = document.getElementById(targetId.replace("-result", "-empty"));
+      if (empty) empty.style.display = "none";
+    }
+  });
+</script>
+{% endblock %}
