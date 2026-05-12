@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>humanize-en — M11 placeholder</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           max-width: 720px; margin: 4em auto; padding: 0 1em; color: #111; line-height: 1.5; }
+    code { background: #f3f4f6; padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.95em; }
+    .muted { color: #6b7280; font-size: 0.9em; }
+    .ok { color: #047857; }
+    .pending { color: #b45309; }
+    ul { padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <h1>humanize-en <span class="muted">v{{ version }}</span></h1>
+
+  <p>
+    <strong class="pending">M11 step 1 — placeholder.</strong>
+    The HTMX endpoints are wired through
+    <code>humanize_core.web.app.create_app(templates_dir=…)</code>
+    but the polished single-page UI is still being ported from
+    <code>humanize-zh</code>. Track progress in
+    <code>docs/plan.md §M11</code>.
+  </p>
+
+  <h3>What works today</h3>
+  <ul>
+    <li class="ok">The JSON API:
+      <code>/api/detect</code>, <code>/api/polish</code>,
+      <code>/api/judge</code>, <code>/api/providers</code>,
+      <code>/api/languages</code>, <code>/health</code>.
+    </li>
+    <li class="ok">HTMX endpoints reachable:
+      <code>POST /htmx/detect</code>, <code>/htmx/polish</code>,
+      <code>/htmx/oneshot</code>, <code>/htmx/oneshot-loop</code>,
+      <code>/htmx/judge</code>
+      (use the JSON API for now if you need the structured payloads).
+    </li>
+    <li class="ok">Language registry sees:
+      <code>{{ languages.codes|join(", ") }}</code>.
+    </li>
+  </ul>
+
+  <h3>What's next</h3>
+  <ul>
+    <li class="pending">M11 step 2 — port humanize-zh's templates verbatim.</li>
+    <li class="pending">M11 step 3 — translate UI copy + swap Chinese-only service refs.</li>
+    <li class="pending">M11 step 5 — repoint <code>humanize-en ui</code> to this app and ship.</li>
+  </ul>
+
+  <p class="muted">
+    Active LLM provider:
+    {% if providers.active_will_be %}
+      <code>{{ providers.active_will_be }}</code> (auto-detected from env).
+    {% else %}
+      <em>none</em> — set <code>OPENAI_API_KEY</code> / <code>ANTHROPIC_API_KEY</code> /
+      <code>DEEPSEEK_API_KEY</code> / etc. in a <code>.env</code> file or shell env.
+    {% endif %}
+  </p>
+</body>
+</html>
