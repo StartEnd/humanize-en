@@ -30,6 +30,8 @@ from humanize_core.combined import combined_score
 from humanize_core.postprocess import _deterministic_cleanup  # type: ignore[attr-defined]
 
 import humanize_en  # noqa: F401  -- registers the en profile via __init__
+from humanize_en import Strength
+from humanize_en.prompt import build_humanize_postprocess_prompt
 
 SAMPLE_AI_TEXT = dedent("""\
     As an AI language model, I would like to point out that software
@@ -183,9 +185,6 @@ def main() -> int:  # noqa: PLR0915 - smoke-test script, OK
     print("  ✓ aggressive=True correctly routes to rewrite template")
 
     _section("5. strength knob (M7) — three-tier prompt rendering")
-    from humanize_en import Strength
-    from humanize_en.prompt import build_humanize_postprocess_prompt
-
     lengths: dict[str, int] = {}
     for level in (Strength.LOW, Strength.MEDIUM, Strength.HIGH):
         rendered = build_humanize_postprocess_prompt(
@@ -208,29 +207,100 @@ def main() -> int:  # noqa: PLR0915 - smoke-test script, OK
     print("\n  ✓ all three strengths produce distinct prompts "
           "(LOW < MEDIUM, HIGH = aggressive template)")
 
-    _section("6. (optional) full LLM polish")
-    if not (
-        os.getenv("OPENAI_API_KEY")
-        or os.getenv("ANTHROPIC_API_KEY")
-        or os.getenv("OPENROUTER_API_KEY")
-    ):
-        print("no LLM API key in env (OPENAI_API_KEY / ANTHROPIC_API_KEY / "
-              "OPENROUTER_API_KEY). Skipping LLM round-trip.\n"
-              "Layers 1-3 above already verify M1-M5 wiring without LLM.")
+    _section("6. (optional) full LLM polish — three strengths")
+    provider_id = None
+    if os.getenv("DEEPSEEK_API_KEY"):
+        provider_id = "deepseek"
+    elif os.getenv("OPENAI_API_KEY"):
+        provider_id = "openai"
+    elif os.getenv("ANTHROPIC_API_KEY"):
+        provider_id = "anthropic"
+
+    if provider_id is None:
+        print("no LLM API key in env (DEEPSEEK_API_KEY / OPENAI_API_KEY / "
+              "ANTHROPIC_API_KEY). Skipping LLM round-trip.\n"
+              "Layers 1-5 above already verify M1-M7 wiring without LLM.")
         return 0
 
+    print(f"using provider: {provider_id}\n")
+
+    from humanize_core.llm._resolve import resolve_provider
     from humanize_core.postprocess import postprocess_humanize
 
-    print("LLM key found — attempting one polish round...")
+    # Resolve once so we can reuse the same provider instance across all
+    # three strength calls (avoids repeated SDK client construction).
     try:
-        polished = postprocess_humanize(SAMPLE_AI_TEXT, lang="en")
-        print(f"\nPOLISHED OUTPUT (first 400 chars):\n{polished[:400]!r}")
-        polished_score = combined_score(polished, lang="en")
-        print(f"\npolished combined     : {polished_score.combined_probability}")
-        print(f"  full drop from raw  : {before.combined_probability - polished_score.combined_probability:+.1f}")
-    except Exception as e:  # smoke-test, surface error but don't fail the script
-        print(f"\n  ⚠ LLM polish raised: {type(e).__name__}: {e}")
-        print("  This may be a key/quota issue; M1-M5 themselves still verify.")
+        provider = resolve_provider(provider_id)
+    except Exception as e:  # noqa: BLE001
+        print(f"  ⚠ provider {provider_id!r} could not be resolved: {e}")
+        return 1
+
+    results: dict[str, dict] = {}
+
+    # MEDIUM: default postprocess_humanize path (aggressive=False ->
+    # back-compat mapping in the EN dispatcher picks Strength.MEDIUM).
+    # The framework's "already publishable" short-circuit needs
+    # rule_score >= 25 OR combined >= 30; our sample scores rule=100
+    # so it always proceeds to the LLM call.
+    # HIGH: same path with force_llm=True (-> aggressive=True -> HIGH).
+    # LOW: direct dispatcher call (postprocess_humanize doesn't expose
+    # strength= yet -- documented M7 limitation).
+
+    def _polish_via_postprocess(force_llm: bool) -> tuple[str, float]:
+        polished, score_after, _ = postprocess_humanize(
+            SAMPLE_AI_TEXT, lang="en", provider=provider,
+            violations=raw_violations, force_llm=force_llm,
+        )
+        rule_after = score_after.total if score_after is not None else 0.0
+        return polished, rule_after
+
+    def _polish_via_dispatcher(strength: Strength) -> tuple[str, float]:
+        prompt_text = build_humanize_postprocess_prompt(
+            SAMPLE_AI_TEXT, raw_violations, strength=strength,
+        )
+        response = provider.complete(prompt_text, max_tokens=4096, temperature=0.7)
+        polished = response.text.strip()
+        rule_after = profile.detector.score(polished).total
+        return polished, rule_after
+
+    def _report(level: str, polished: str, rule_after: float) -> None:
+        combined_after = combined_score(polished, lang="en").combined_probability
+        results[level] = {
+            "text": polished,
+            "rule_after": rule_after,
+            "combined_after": combined_after,
+        }
+        print(f"polished length       : {len(polished)} chars "
+              f"(was {len(SAMPLE_AI_TEXT)})")
+        print(f"polished rule score   : {rule_after}/100")
+        print(f"polished combined     : {combined_after}/100")
+        print(f"first 200 chars       : {polished[:200]!r}\n")
+
+    print("--- LOW (3-section trimmed rules) ---")
+    polished_lo, rule_lo = _polish_via_dispatcher(Strength.LOW)
+    _report("low", polished_lo, rule_lo)
+
+    print("--- MEDIUM (full 8-section rules block) ---")
+    polished_med, rule_med = _polish_via_postprocess(force_llm=False)
+    _report("medium", polished_med, rule_med)
+
+    print("--- HIGH (aggressive rewrite template) ---")
+    polished_hi, rule_hi = _polish_via_postprocess(force_llm=True)
+    _report("high", polished_hi, rule_hi)
+
+    _section("7. summary — strength × score-drop matrix")
+    print(f"{'':12s}  {'rule':>8s}  {'combined':>10s}  {'rule Δ':>10s}  "
+          f"{'combined Δ':>12s}")
+    print(f"{'baseline':12s}  {before.rule_probability:>8.1f}  "
+          f"{before.combined_probability:>10.1f}  "
+          f"{'-':>10s}  {'-':>12s}")
+    for level in ("low", "medium", "high"):
+        r = results[level]
+        rule_delta = before.rule_probability - r["rule_after"]
+        comb_delta = before.combined_probability - r["combined_after"]
+        print(f"{level:12s}  {r['rule_after']:>8.1f}  "
+              f"{r['combined_after']:>10.1f}  "
+              f"{rule_delta:>+10.1f}  {comb_delta:>+12.1f}")
 
     return 0
 
