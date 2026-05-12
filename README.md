@@ -1,14 +1,22 @@
 # humanize-en
 
-**Pre-alpha (M1 scaffold).** English AI-text humanizer plugin for
-[`humanize-core`](../humanize-core/). Sibling to
+**Pre-alpha (M8 — Binoculars wrapper).** English AI-text humanizer
+plugin for [`humanize-core`](../humanize-core/). Sibling to
 [`humanize-zh`](../humanize-zh/). Roadmap and prior-art survey in
 [`docs/plan.md`](docs/plan.md).
 
-This package is *not yet useful*. M1 ships only the scaffolding that
-makes `humanize_core.get_language("en")` return a valid (but stubbed)
-`LanguageProfile`. Real detection rules, n-gram engine, replacements,
-and prompts arrive in M2-M8 — see `docs/plan.md` §10.
+Status by milestone:
+
+| ID | Layer                                | Status |
+|----|--------------------------------------|--------|
+| M1 | Scaffold + protocol contracts        | ✅ |
+| M2 | n-gram engine (HC3-en, LR-calibrated) | ✅ |
+| M3 | Lexical + phrase rules                | ✅ |
+| M4 | Structural / rhythm / soul-signals    | ✅ |
+| M5 | Replacement table (102 pairs, 6 buckets) | ✅ |
+| M6 | English prompt pack                   | ✅ |
+| M7 | Strength knob (low/medium/high)       | ✅ |
+| M8 | Optional Binoculars perplexity wrapper | ✅ |
 
 ## What this is (when finished, ~M8)
 
@@ -94,8 +102,50 @@ humanize en polish file.md --strength high
 humanize en judge file.md
 ```
 
-At M1 only `humanize_core.get_language("en")` returns a working
-`LanguageProfile`; the public functions above are not yet wired.
+Through M8, the detector / replacement / prompt layers are wired
+into the `LanguageProfile`. End-to-end `postprocess_humanize` and
+`judge` work via `humanize_core` — the convenience top-level
+re-exports (`humanize_en.score`, `humanize_en.postprocess_humanize`,
+etc.) and the dedicated `humanize-en` CLI are still pending.
+
+## Optional: Binoculars perplexity signal (M8)
+
+For benchmark and gate-check use, we ship a thin wrapper around the
+upstream [Binoculars][binoculars] detector (Hans et al., ICML 2024 —
+Falcon-7B base vs Falcon-7B-instruct perplexity ratio, BSD-3 licence).
+Binoculars achieves ~0.99 zero-shot AUC on un-attacked English; our
+HC3-trained rule + n-gram pipeline caps around 0.80 by design. The
+wrapper exists so the §7.1 *humanization gate* can measure
+Binoculars-score *drop* after polish, not as a replacement detector.
+
+```bash
+pip install "humanize-en[perplexity]"
+pip install "git+https://github.com/ahans30/Binoculars"
+```
+
+```python
+from humanize_en.perplexity import is_available, score
+
+if is_available():
+    # Lower = more AI-like (paper polarity; we never invert).
+    raw = score(article_text)
+```
+
+Important properties:
+
+- **Lazy import.** Importing `humanize_en.perplexity` never touches
+  `transformers` / `torch` / `binoculars`. Model load happens on the
+  first `score()` call (~30 s GPU, several minutes CPU; ~14 GB of
+  Falcon-7B weights downloaded once).
+- **Singleton.** Repeated `score()` calls reuse one detector.
+  Tests / batch jobs that need isolation should construct
+  `BinocularsScorer` directly.
+- **Typed missing-dep error.** Without the extras installed,
+  `score()` raises `PerplexityNotInstalledError` (a subclass of
+  `ImportError`) with the install commands in the message.
+- **Polarity matches the paper, not our other detectors.** Lower
+  numbers indicate AI. We resist normalising this so benchmark
+  numbers can be compared verbatim with published results.
 
 ## Limitations
 

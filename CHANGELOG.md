@@ -9,6 +9,93 @@ milestone (M1, M2, ...).
 
 ## [Unreleased]
 
+### M8 — Optional Binoculars perplexity wrapper
+
+- New :mod:`humanize_en.perplexity` package wrapping the upstream
+  [Binoculars](https://github.com/ahans30/Binoculars) detector
+  (Hans et al., ICML 2024 — Falcon-7B base vs Falcon-7B-instruct
+  perplexity ratio, BSD-3 licensed). Purpose: provide the
+  §7.1 humanization gate with a strong independent
+  score-drop signal (~0.99 zero-shot AUC vs our ~0.80 rule + n-gram
+  pipeline). **Not** a replacement detector — we surface flags;
+  Binoculars produces a single number.
+- Public surface (4 symbols, mirrored in :data:`__all__`):
+  - :class:`BinocularsScorer` — instance-level wrapper with custom
+    model paths / dtype / mode. Cheap to construct, lazy on first
+    :meth:`score`.
+  - :class:`PerplexityNotInstalledError` — subclass of
+    :class:`ImportError`. Carries the two-step install commands
+    in its message so callers can copy-paste the fix from a
+    traceback. Inheriting from :class:`ImportError` keeps it
+    compatible with broad ``except ImportError`` clauses in the
+    benchmark / gate loaders.
+  - :func:`is_available` — side-effect-free availability probe
+    using :func:`importlib.util.find_spec`. Safe to call from
+    health endpoints; never instantiates a detector.
+  - :func:`score` — convenience function over a module-level
+    singleton. Reuses one ~14 GB Falcon-7B pair across calls.
+- Design decisions (documented inline in
+  ``humanize_en/perplexity/binoculars_wrapper.py``):
+  - **Wrap, do not vendor.** Pure dependency on the upstream
+    PyPI/git install; we ship no model weights and copy no
+    detector code.
+  - **Lazy at every layer.** Importing the package never imports
+    ``binoculars`` / ``transformers`` / ``torch``. The expensive
+    ``Binoculars()`` constructor runs on the first :meth:`score`
+    call, behind a double-checked lock so concurrent threads
+    don't each warm up 14 GB of weights.
+  - **Polarity unchanged.** Binoculars uses *lower = AI-like*,
+    opposite to our rule / n-gram detectors. We expose the raw
+    upstream value so benchmark numbers match the paper. Polarity
+    correction lives in the §7.1 gate caller, not here.
+  - **Forward-only kwargs.** Only constructor kwargs the user
+    actually customised reach the upstream class. Keeps us robust
+    to upstream API drift (the public Binoculars constructor has
+    gained / dropped kwargs across releases).
+  - **Tolerant batch path.** :meth:`score_batch` retries
+    one-by-one if the installed Binoculars version doesn't accept
+    a list (older releases were single-text only).
+- Optional install (documented in README and pyproject):
+
+  ```bash
+  pip install "humanize-en[perplexity]"
+  pip install "git+https://github.com/ahans30/Binoculars"
+  ```
+
+  The two-step pattern is unavoidable while Binoculars remains
+  off PyPI. We declare ``transformers>=4.40`` and ``torch>=2.0``
+  via the ``[perplexity]`` extra, but the Binoculars package
+  itself ships only via git — embedding a git URL in
+  ``install_requires`` would break vanilla pip workflows.
+- 27 tests added (``tests/test_perplexity.py``), 100% coverage on
+  ``binoculars_wrapper.py`` (77 statements) and ``__init__.py``:
+  - **Public surface** (5 tests): exact ``__all__``, re-export
+    identity vs the wrapper module, ``PerplexityNotInstalledError``
+    subclasses ``ImportError``, error message always carries
+    install hint, custom messages preserve the hint.
+  - **is_available** (3): false when ``find_spec`` returns None,
+    true when a fake module is injected, swallows ``find_spec``
+    exceptions on half-installed parents.
+  - **BinocularsScorer construction** (3): cheap construction
+    never loads, succeeds even with no dep, records all four
+    override kwargs.
+  - **Loading path** (5): missing dep raises typed error with
+    original cause chained, ``_load`` forwards only set kwargs,
+    forwards no kwargs when all default, forwards
+    observer/performer paths, caches per-instance.
+  - **score()** (3): returns upstream value un-inverted, coerces
+    weird numerics to ``float``, rejects non-string input *before*
+    loading the detector.
+  - **score_batch()** (4): happy-path returns list[float],
+    falls back to per-item loop when upstream rejects a list,
+    rejects non-list / non-string-element input.
+  - **Module singleton** (3): repeated ``score()`` shares one
+    detector, raises typed error when dep absent,
+    ``_reset_global_scorer`` rebuilds.
+  - All happy-path tests use a stub ``binoculars`` module injected
+    into ``sys.modules`` + a patched ``find_spec`` so the suite
+    runs in < 0.3 s on machines without Falcon weights.
+
 ### M7 — Strength knob (low / medium / high)
 
 - New :class:`humanize_en.Strength` enum (`humanize_en/prompt.py`):

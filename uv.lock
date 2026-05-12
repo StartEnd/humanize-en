@@ -1196,7 +1196,7 @@ bench = [
     { name = "scikit-learn" },
 ]
 build-data = [
-    { name = "datasets" },
+    { name = "huggingface-hub" },
     { name = "numpy" },
     { name = "scikit-learn" },
 ]
@@ -1222,8 +1222,8 @@ ui = [
 requires-dist = [
     { name = "bert-score", marker = "extra == 'bench'", specifier = ">=0.3" },
     { name = "datasets", marker = "extra == 'bench'", specifier = ">=2.14" },
-    { name = "datasets", marker = "extra == 'build-data'", specifier = ">=2.14" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
+    { name = "huggingface-hub", marker = "extra == 'build-data'", specifier = ">=0.20" },
     { name = "humanize-core", editable = "../humanize-core" },
     { name = "humanize-core", extras = ["anthropic"], marker = "extra == 'anthropic'", editable = "../humanize-core" },
     { name = "humanize-core", extras = ["openai"], marker = "extra == 'openai'", editable = "../humanize-core" },
