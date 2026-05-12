@@ -1,24 +1,26 @@
 # humanize-en
 
-**Pre-alpha (M8 — Binoculars wrapper).** English AI-text humanizer
+**Pre-alpha (M7 — Binoculars wrapper).** English AI-text humanizer
 plugin for [`humanize-core`](../humanize-core/). Sibling to
 [`humanize-zh`](../humanize-zh/). Roadmap and prior-art survey in
 [`docs/plan.md`](docs/plan.md).
 
-Status by milestone:
+Status by milestone (numbering matches `docs/plan.md` §10):
 
-| ID | Layer                                | Status |
-|----|--------------------------------------|--------|
-| M1 | Scaffold + protocol contracts        | ✅ |
-| M2 | n-gram engine (HC3-en, LR-calibrated) | ✅ |
-| M3 | Lexical + phrase rules                | ✅ |
-| M4 | Structural / rhythm / soul-signals    | ✅ |
-| M5 | Replacement table (102 pairs, 6 buckets) | ✅ |
-| M6 | English prompt pack                   | ✅ |
-| M7 | Strength knob (low/medium/high)       | ✅ |
-| M8 | Optional Binoculars perplexity wrapper | ✅ |
+| ID  | Layer                                          | Status |
+|-----|------------------------------------------------|--------|
+| M1  | Scaffold + protocol contracts                  | ✅ |
+| M2  | n-gram engine (HC3-en, LR-calibrated)          | ✅ |
+| M3  | Detector v1 — lexical + phrase rules           | ✅ |
+| M4  | Detector v2 — structural / rhythm / soul-signals | ✅ |
+| M5  | Replacements (102 pairs) + prompts (writer/judge/loop) | ✅ |
+| M6  | Strength knob (low / medium / high)            | ✅ |
+| M7  | Optional Binoculars perplexity wrapper         | ✅ |
+| M8  | Benchmark suite + §7.1 humanization gate       | pending |
+| M9  | Examples + auto-generated rules docs           | pending |
+| M10 | PyPI release                                   | pending |
 
-## What this is (when finished, ~M8)
+## What this is (when finished, ~M10)
 
 An **interpretable, open-source English AI-text humanizer** that:
 
@@ -79,36 +81,58 @@ uv sync --extra dev   # picks up ../humanize-core via [tool.uv.sources]
 make test
 ```
 
-## Usage (planned API, ~M6)
+## Usage
 
 ```python
-from humanize_en import score, postprocess_humanize, llm
+from humanize_en import (
+    score, ngram_score, combined_score,
+    postprocess_humanize, judge, iterative_polish,
+    Strength, llm,
+)
 
-llm.use("openai", api_key="sk-...")
+# Configure an LLM provider (pick one):
+llm.autodetect()                                # discover from env vars
+# llm.use("openai", api_key="sk-...")
+# llm.use_openai_compat(name="deepseek", base_url="...", api_key="...",
+#                       model="deepseek-chat")
 
-text = "It's worth noting that this is a transformative paradigm shift..."
+text = "It is important to note that this paradigm shift will leverage cutting-edge AI..."
+
+# 1) Detection (no LLM required) ─────────────────────────────────────
 s = score(text)
-print(s.total, s.level)   # 60.0 HIGH (likely AI-generated)
+print(s.total, s.level)                         # 23.0  LOW (looks human-written)
+for v in s.violations:
+    print(f"  {v.rule}: {v.sample!r}  (+{v.score})")
 
-polished = postprocess_humanize(text, strength="medium")
-print(polished)           # "This is a major change..."
+# 2) One-shot polish ─────────────────────────────────────────────────
+polished, after, before = postprocess_humanize(text, scene="analysis")
+print(polished)
+
+# 3) Custom-strength polish (low / medium / high) ───────────────────
+from humanize_en import build_humanize_postprocess_prompt
+prompt = build_humanize_postprocess_prompt(
+    text, violations=s.violations, scene="analysis", strength=Strength.HIGH,
+)
+polished_aggressive = llm.get_active().complete(prompt).text
+
+# 4) Closed-loop polish — writer/judge ping-pong until score ≤ 30 ───
+result = iterative_polish(text, rounds=3, target_ai_score=30,
+                          writer_provider="openai", judge_provider="anthropic")
+print(result.rounds[-1].polished)
+
+# 5) Final LLM review ────────────────────────────────────────────────
+verdict = judge(polished, writer_provider="openai", judge_provider="anthropic")
+print(verdict["publishable"], verdict.get("rewrite_brief"))
 ```
 
-The CLI mirrors humanize-zh's interface:
+`postprocess_humanize` / `judge` / `iterative_polish` are all
+EN-defaulted thin shims over `humanize_core` — see
+`humanize_en/{postprocess,judge,iterative}.py` for the exact
+forwarding contract. The `humanize-en` standalone CLI is still
+pending (M9); for now use `python -m humanize_en.judge file.md`
+or the framework's multi-language CLI in `humanize-core`.
 
-```bash
-humanize en detect file.md
-humanize en polish file.md --strength high
-humanize en judge file.md
-```
-
-Through M8, the detector / replacement / prompt layers are wired
-into the `LanguageProfile`. End-to-end `postprocess_humanize` and
-`judge` work via `humanize_core` — the convenience top-level
-re-exports (`humanize_en.score`, `humanize_en.postprocess_humanize`,
-etc.) and the dedicated `humanize-en` CLI are still pending.
-
-## Optional: Binoculars perplexity signal (M8)
+## Optional: Binoculars perplexity signal (M7)
 
 For benchmark and gate-check use, we ship a thin wrapper around the
 upstream [Binoculars][binoculars] detector (Hans et al., ICML 2024 —

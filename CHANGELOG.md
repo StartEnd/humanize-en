@@ -9,7 +9,112 @@ milestone (M1, M2, ...).
 
 ## [Unreleased]
 
-### M8 — Optional Binoculars perplexity wrapper
+> **Numbering note.** The first six entries below (M1–M6) shipped under
+> their development labels. The plan in `docs/plan.md` §10 groups
+> "replacements" and "prompts" into a single **M5**, shifting later
+> milestones down by one. We retitled the two most-recent entries to
+> match the plan (Binoculars wrapper = plan-M7, Strength knob =
+> plan-M6) and left the earlier dev-history labels untouched.
+
+### Top-level convenience API (post-M7 plumbing, pre-M8)
+
+Closes the README's "the public functions above are not yet wired"
+debt. Six new thin shim modules mirror `humanize-zh`'s pattern
+byte-for-byte modulo the EN default; together they let callers
+write the flat `from humanize_en import score, postprocess_humanize,
+judge, ...` form documented in the README, without going through
+`humanize_core.get_language("en")` by hand.
+
+- New `humanize_en.detect` — re-exports `score`, `Score`,
+  `Violation`, `EnDetector`, `en_detector` from
+  `humanize_en._lang.en.detector`. `__getattr__` lazily forwards
+  any private helper still living under `_lang/en/detector.py`
+  (e.g., `_load_rules`, `_strip_codeblocks`, `RULES_PATH`) so
+  tests that imported through the top-level path keep working as
+  the rule set evolves.
+- New `humanize_en.ngram_check` — same pattern for the n-gram
+  layer. Re-exports `ngram_score`, `NgramScore`, `EnNgramEngine`,
+  `en_ngram`, `DATA_DIR` and forwards private helpers via
+  `__getattr__`.
+- New `humanize_en.combined` — three-line wrapper around
+  `humanize_core.combined.combined_score` pinning `lang="en"`.
+  The `CombinedScore` dataclass is re-exported from the framework
+  unchanged (matching the ZH side's identity guarantee).
+- New `humanize_en.postprocess` — pins the EN profile and threads
+  caller-supplied `ReplacementsTable` overrides through a
+  `dataclasses.replace(en_profile, replacements=...)` clone via
+  `_EnCodeReplacementsAdapter` (re-stamps stub tables with
+  `code="en"` so `LanguageProfile.__post_init__` validates).
+  Re-exports `_deterministic_cleanup`, `_load_replacements`,
+  and the legacy framework helpers (`_protect_spans`,
+  `_strip_number_backticks`, …) for backward compatibility.
+- New `humanize_en.judge` — `lang="en"`-pinned wrapper plus an
+  **English-localized** `format_report` (the framework one is
+  language-agnostic; humanize-zh keeps its own Chinese version on
+  the ZH side — same pattern). Ships a `python -m humanize_en.judge`
+  CLI mirroring `humanize_zh.judge.main` so the README command
+  works in M9's absence.
+- New `humanize_en.iterative` — `lang="en"`-pinned wrapper around
+  `humanize_core.iterative.iterative_polish`; re-exports
+  `IterativeResult`, `RoundResult`, `Verdict`,
+  `_build_round_violations`, and the EN
+  `LOOP_JUDGE_PROMPT`.
+- New `humanize_en.llm` (package) — pure re-export of
+  `humanize_core.llm`. Submodules (`_resolve`,
+  `anthropic_provider`, `base`, `callable_provider`,
+  `openai_compat`, `openai_provider`, `registry`) are forwarded
+  through `sys.modules` so `humanize_en.llm.registry` is the
+  **same module object** as `humanize_core.llm.registry`. This
+  is load-bearing: `_ACTIVE`, the autodetect lock, and provider
+  caches all live on those module globals; two parallel copies
+  would let `llm.use(...)` on one side fail to register with
+  `llm.get_active()` on the other.
+- `humanize_en/__init__.py` rewritten to:
+  - re-export the framework's language registry directly from
+    `humanize_core.language_registry` (the plugin doesn't take a
+    `humanize-zh` dep);
+  - surface the 27 README-documented symbols at package root via
+    `__all__`;
+  - auto-register `en_profile` on import inside
+    `contextlib.suppress(LanguageAlreadyRegistered)` so
+    `importlib.reload(humanize_en)` is a no-op.
+- 23 new tests (`tests/test_top_level_api.py`):
+  - **Top-level `__all__` shape** (3): every README symbol is in
+    `__all__`, resolves at import, and the version string is
+    non-empty.
+  - **Forwarding identity** (6): `score` / `ngram_score` /
+    `CombinedScore` are *the same objects* as the framework /
+    internal ones; `postprocess_humanize`, `judge`,
+    `iterative_polish`, `combined_score` actually call into
+    `humanize_core` with `lang="en"` (or the EN profile)
+    pre-bound — verified by monkey-patching the framework
+    functions and asserting `lang="en"` shows up in the captured
+    kwargs.
+  - **LLM submodule identity** (8): every framework submodule
+    is the same module object after going through
+    `humanize_en.llm.<sub>`; `use_callable` through `humanize_en.llm`
+    is observable via `humanize_core.llm.get_active()`.
+  - **Profile registration** (2): `humanize_en.get_language("en")`
+    returns the singleton; `importlib.reload(humanize_en)` does
+    not raise.
+  - **End-to-end smoke** (3): the rule detector flags a dense
+    AI sample, `combined_score` sets `lang="en"`, and
+    `build_humanize_prompt(scene="analysis")` returns a non-trivial
+    string.
+- Python gotcha documented inline in the judge test:
+  `humanize_core/__init__.py` does `from .judge import judge`,
+  which shadows the *module* attribute `humanize_core.judge`
+  with the *function* of the same name. The test resolves the
+  module via `sys.modules["humanize_core.judge"]` (and
+  `sys.modules["humanize_en.judge"]` for the same reason in the
+  plugin's `__init__.py`).
+- README "Usage" section rewritten to show all five entry points
+  (detect / one-shot polish / strength-knob prompt / iterative
+  loop / judge), removing the prior "not yet wired" caveat.
+- All 198 tests pass; ruff clean; line coverage 84 % across the
+  plugin (100 % on every new shim module).
+
+### M7 — Optional Binoculars perplexity wrapper
 
 - New :mod:`humanize_en.perplexity` package wrapping the upstream
   [Binoculars](https://github.com/ahans30/Binoculars) detector
@@ -96,7 +201,7 @@ milestone (M1, M2, ...).
     into ``sys.modules`` + a patched ``find_spec`` so the suite
     runs in < 0.3 s on machines without Falcon weights.
 
-### M7 — Strength knob (low / medium / high)
+### M6 — Strength knob (low / medium / high)
 
 - New :class:`humanize_en.Strength` enum (`humanize_en/prompt.py`):
   - ``Strength.LOW`` — light touch. Uses ``POSTPROCESS_PROMPT``
