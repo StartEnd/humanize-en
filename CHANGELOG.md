@@ -9,6 +9,83 @@ milestone (M1, M2, ...).
 
 ## [Unreleased]
 
+### M7 — Strength knob (low / medium / high)
+
+- New :class:`humanize_en.Strength` enum (`humanize_en/prompt.py`):
+  - ``Strength.LOW`` — light touch. Uses ``POSTPROCESS_PROMPT``
+    with a **trimmed 3-section** rules block (CORE_RULES +
+    WORDS_BLACKLIST + SELF_CHECK only). LLM gets latitude to
+    leave structurally-fine prose alone. Suitable when the input
+    is already mostly human-written.
+  - ``Strength.MEDIUM`` — default. ``POSTPROCESS_PROMPT`` with
+    the full scene-specific rules block. Equivalent to the M6
+    default behaviour.
+  - ``Strength.HIGH`` — aggressive rewrite. Switches to
+    ``POSTPROCESS_PROMPT_AGGRESSIVE`` (which inlines its own rules)
+    so the LLM rewrites sentence structure, not just vocabulary.
+    Equivalent to legacy ``aggressive=True``.
+- Inheriting from ``str`` so ``strength="low"`` works alongside
+  ``strength=Strength.LOW`` — CLI argparse can pass strings
+  straight through.
+- Extended ``build_humanize_postprocess_prompt(...)`` with
+  ``strength: Strength | str | None = None`` keyword. Backward
+  compatible with the framework's writer_prompt_builder hook
+  signature: ``aggressive=True`` still maps to ``Strength.HIGH``
+  and ``aggressive=False`` to ``Strength.MEDIUM``. Explicit
+  ``strength=`` always wins over ``aggressive``.
+- Verified end-to-end on the curated 1063-char heavy-AI sample:
+  - LOW prompt:    **7755 chars** (3 sections + 13 violations + article)
+  - MEDIUM prompt: **14011 chars** (full 8-section analysis scene)
+  - HIGH prompt:   **5381 chars** (aggressive rewrite template;
+    no separate HUMANIZE_RULES block since the template inlines
+    its own rules)
+- Added 19 strength tests (``tests/test_strength.py``):
+  - Enum has exactly 3 members; is a ``str`` subclass; re-exported
+    from package root.
+  - 11 parametrised ``_resolve_strength`` precedence cases:
+    explicit ``strength`` wins over ``aggressive``; both absent
+    -> MEDIUM; ``aggressive=True/False`` honoured only when
+    ``strength is None``; invalid strings raise ``ValueError``.
+  - Three strengths produce three distinct prompts.
+  - HIGH switches the template (asserts the AGGRESSIVE header
+    appears, the standard CORE_RULES heading does not).
+  - MEDIUM contains all 8 section first-lines.
+  - LOW contains the 3 kept section first-lines and **none** of
+    the 5 dropped ones (HARD_NEVER, HARD_LIMITS,
+    OPENING_DIVERSITY, SOUL_INJECTION, ASSERTION_TEMPLATE).
+  - LOW prompt is at least 3000 chars shorter than MEDIUM.
+  - ``aggressive=True`` byte-for-byte equals ``strength=HIGH``;
+    ``aggressive=False`` byte-for-byte equals ``strength=MEDIUM``.
+  - String form (``"low"``) byte-for-byte equals enum form
+    (``Strength.LOW``).
+- Bumped ``profile.metadata['milestone']`` to ``M7-strength-knob``.
+- Extended ``scripts/verify_e2e.py`` with a layer-5 step that
+  asserts LOW < MEDIUM and HIGH picks the aggressive template
+  on the live curated sample.
+- Total test count: **148** (122 M6 + 19 M7 + 7 framework
+  housekeeping), 92% coverage, ruff/mypy clean.
+
+#### M7 known limitations
+
+1. **CLI flag not yet wired.** The plan lists "CLI flag
+   ``--strength`` wired through ``polish()`` and
+   ``iterative_polish()``" as the M7 exit criterion. The dispatcher
+   accepts the knob, but humanize-en doesn't ship a CLI yet
+   (humanize-zh's ``cli/`` shape is the model). CLI hookup
+   moves to M9 with the wider release tooling.
+2. **Framework-side propagation.** ``humanize_core.postprocess.\
+   _build_writer_prompt`` calls
+   ``profile.prompt_pack.writer_prompt_builder(article=...,
+   violations=..., scene=..., aggressive=...)``. The 4-kwarg
+   signature is the framework contract -- it does not yet pass
+   ``strength``. So full M7 power (especially ``LOW``) is
+   accessible only via direct ``humanize_en.prompt`` calls today.
+   Going through ``humanize_core.postprocess_humanize(lang="en")``
+   gets MEDIUM (default) or HIGH (when an upstream caller flips
+   ``aggressive``). Promoting ``strength`` to the framework
+   PromptPack contract is a humanize-core change deferred to a
+   later iteration.
+
 ### M6 — Plugin-owned prompt pack (in progress)
 
 - Replaced ``humanize_en/_lang/en/prompts.py`` (was a re-export stub

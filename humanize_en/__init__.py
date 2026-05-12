@@ -57,6 +57,7 @@ from humanize_core.protocols import LanguageProfile
 
 from ._lang.en.profile import en_profile
 from .prompt import (
+    Strength,
     build_humanize_postprocess_prompt,
     build_humanize_prompt,
 )
@@ -93,4 +94,6 @@ __all__ = [
     # M6 prompt assembly
     "build_humanize_prompt",
     "build_humanize_postprocess_prompt",
+    # M7 strength knob
+    "Strength",
 ]

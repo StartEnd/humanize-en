@@ -12,6 +12,10 @@ Public-facing module. Mirrors :mod:`humanize_zh.prompt`:
   ``humanize-core`` calls this function via the EN plugin's
   ``writer_prompt_builder`` hook on its :class:`PromptPack`.
 
+- Owns the M7 :class:`Strength` knob (``low`` / ``medium`` /
+  ``high``) and a back-compat ``aggressive`` boolean that maps
+  to ``high`` / ``medium`` for the framework hook signature.
+
 The framework EN placeholder prompts in :mod:`humanize_core.prompt`
 remain as fallbacks for the case where the EN plugin is not
 installed (LLM-only polish, no rule injection). When the plugin
@@ -19,6 +23,9 @@ installed (LLM-only polish, no rule injection). When the plugin
 """
 
 from __future__ import annotations
+
+from enum import Enum
+from typing import Final
 
 from humanize_core.prompt import (
     JUDGE_PROMPT_EN,
@@ -44,29 +51,91 @@ from ._lang.en.prompts import (
 )
 
 
+class Strength(str, Enum):
+    """M7 strength knob for the polish pass.
+
+    The three levels trade conservatism for rewrite latitude:
+
+    - :attr:`LOW` -- light touch. Uses :data:`POSTPROCESS_PROMPT`
+      with a **trimmed** rules section (only ``CORE_RULES`` +
+      ``WORDS_BLACKLIST`` + ``SELF_CHECK``). Suitable when the
+      input is already mostly human-written and you only want to
+      strip obvious AI vocabulary.
+    - :attr:`MEDIUM` -- the default. Uses :data:`POSTPROCESS_PROMPT`
+      with the full scene-specific rules section. Good first pass
+      for typical LLM output.
+    - :attr:`HIGH` -- aggressive rewrite. Uses
+      :data:`POSTPROCESS_PROMPT_AGGRESSIVE`, which instructs the
+      LLM to rewrite sentence structure (not just substitute words).
+      Equivalent to ``aggressive=True`` on the legacy signature.
+
+    Inheriting from ``str`` lets callers pass plain strings
+    (``strength="low"``) or the enum directly. CLI flags can pass
+    the string form straight from argparse without conversion.
+    """
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+# Sections retained at LOW strength. Deliberately small: no rhythm
+# / opening-diversity / soul-injection / assertion-template
+# prescription, so the LLM has more room to leave structurally-fine
+# prose alone.
+_LOW_STRENGTH_SECTIONS: Final = (CORE_RULES, WORDS_BLACKLIST, SELF_CHECK)
+
+
+def _build_low_strength_rules() -> str:
+    """Compact 3-section rule block for :attr:`Strength.LOW`."""
+    return "\n\n---\n\n".join(_LOW_STRENGTH_SECTIONS) + "\n"
+
+
+def _resolve_strength(
+    strength: Strength | str | None,
+    aggressive: bool | None,
+) -> Strength:
+    """Reconcile the ``strength`` and ``aggressive`` arguments.
+
+    Precedence: explicit ``strength`` wins. ``aggressive=True/False``
+    only takes effect when ``strength`` is ``None`` (the default,
+    set by the framework's writer_prompt_builder signature).
+    """
+    if strength is not None:
+        return strength if isinstance(strength, Strength) else Strength(strength)
+    if aggressive is True:
+        return Strength.HIGH
+    return Strength.MEDIUM
+
+
 def build_humanize_postprocess_prompt(
     article: str,
     violations: list,
     scene: str = "analysis",
     *,
-    aggressive: bool = False,
+    strength: Strength | str | None = None,
+    aggressive: bool | None = None,
 ) -> str:
     """Assemble the EN de-AI postprocess prompt with rule injection.
 
-    Three template paths:
+    Three template paths driven by the M7 strength knob:
 
-    1. ``aggressive=True`` -> :data:`POSTPROCESS_PROMPT_AGGRESSIVE`,
-       used when a third-party detector still reports >50% AI score
-       after the standard pass. Rewrites sentence structure rather
-       than just word choice.
-    2. ``aggressive=False`` (default) -> :data:`POSTPROCESS_PROMPT`
+    1. :attr:`Strength.HIGH` (or legacy ``aggressive=True``) ->
+       :data:`POSTPROCESS_PROMPT_AGGRESSIVE`, used when a third-party
+       detector still reports > 50% AI score after the standard
+       pass. Rewrites sentence structure rather than just word choice.
+    2. :attr:`Strength.MEDIUM` (default) -> :data:`POSTPROCESS_PROMPT`
        with :data:`HUMANIZE_RULES` populated by
-       :func:`build_humanize_prompt` for the requested ``scene``,
-       plus a Markdown bullet list of ``violations``.
-    3. Fallback when ``violations`` is empty: a placeholder note
-       explains that the rule scanner found nothing but a third-
-       party detector might still flag the text -- the LLM should
-       focus on rhythm rather than vocabulary.
+       :func:`build_humanize_prompt` for the requested ``scene``
+       (the full scene rule list).
+    3. :attr:`Strength.LOW` -> :data:`POSTPROCESS_PROMPT` with a
+       **trimmed** 3-section rule list (CORE_RULES + WORDS_BLACKLIST
+       + SELF_CHECK only). The LLM gets more latitude to leave
+       structurally-fine prose alone.
+
+    Empty ``violations`` is handled by inserting a placeholder note
+    explaining that the rule scanner found nothing but the LLM should
+    still focus on rhythm and structure.
 
     Args:
         article:    The article body to polish.
@@ -77,11 +146,25 @@ def build_humanize_postprocess_prompt(
                     ``RuleViolation`` does).
         scene:      Rule-list scene -- ``analysis`` / ``essay`` /
                     ``academic`` / ``blog``. Defaults to ``analysis``.
-        aggressive: When ``True``, picks the rewrite-level template.
+                    Ignored when ``strength=Strength.HIGH`` (the
+                    aggressive template carries its own rules) or
+                    ``strength=Strength.LOW`` (forced 3-section
+                    minimal block).
+        strength:   :class:`Strength` enum value or matching string
+                    (``"low"`` / ``"medium"`` / ``"high"``). When
+                    ``None`` (default), falls back to the
+                    ``aggressive`` argument: ``True`` -> ``high``,
+                    ``False`` -> ``medium``.
+        aggressive: Legacy boolean compatible with the framework's
+                    ``writer_prompt_builder`` signature. Equivalent
+                    to ``strength=Strength.HIGH`` when ``True``.
+                    Only consulted when ``strength`` is ``None``.
 
     Returns:
         Fully-assembled prompt string ready for the LLM provider.
     """
+    s = _resolve_strength(strength, aggressive)
+
     if violations:
         viol_text = "\n".join(
             f"- {v.category}.{v.rule}: hit {v.count}x | sample: \"{v.sample[:60]}\""
@@ -94,13 +177,18 @@ def build_humanize_postprocess_prompt(
             "rhythm and structure, not vocabulary.)"
         )
 
-    if aggressive:
+    if s is Strength.HIGH:
         return POSTPROCESS_PROMPT_AGGRESSIVE.format(
             ARTICLE=article,
             VIOLATIONS=viol_text,
         )
 
-    rules = build_humanize_prompt(scene=scene, compact=True)
+    rules = (
+        _build_low_strength_rules()
+        if s is Strength.LOW
+        else build_humanize_prompt(scene=scene, compact=True)
+    )
+
     return POSTPROCESS_PROMPT.format(
         ARTICLE=article,
         VIOLATIONS=viol_text,
@@ -124,6 +212,7 @@ __all__ = [
     "SCENES",
     "SELF_CHECK",
     "SOUL_INJECTION",
+    "Strength",
     "WORDS_BLACKLIST",
     "build_humanize_postprocess_prompt",
     "build_humanize_prompt",

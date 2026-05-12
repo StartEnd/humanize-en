@@ -110,7 +110,7 @@ def make_en_profile() -> LanguageProfile:
             "rule_set_version": en_detector.version,
             "ngram_corpus_id": en_ngram.corpus_id,
             "ngram_test_auc": "0.8847",  # held-out test AUC, see CHANGELOG M2
-            "milestone": "M6-prompt-pack",
+            "milestone": "M7-strength-knob",
         },
     )
 

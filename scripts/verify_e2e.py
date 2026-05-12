@@ -182,7 +182,33 @@ def main() -> int:  # noqa: PLR0915 - smoke-test script, OK
         return 1
     print("  ✓ aggressive=True correctly routes to rewrite template")
 
-    _section("5. (optional) full LLM polish")
+    _section("5. strength knob (M7) — three-tier prompt rendering")
+    from humanize_en import Strength
+    from humanize_en.prompt import build_humanize_postprocess_prompt
+
+    lengths: dict[str, int] = {}
+    for level in (Strength.LOW, Strength.MEDIUM, Strength.HIGH):
+        rendered = build_humanize_postprocess_prompt(
+            SAMPLE_AI_TEXT,
+            raw_violations,
+            scene="analysis",
+            strength=level,
+        )
+        lengths[level.value] = len(rendered)
+        print(f"  strength={level.value:6s} -> {len(rendered):>5} chars")
+
+    if not (lengths["low"] < lengths["medium"]):
+        print("  ⚠ LOW prompt is not shorter than MEDIUM!")
+        return 1
+    if "AI text deep rewrite pass" not in build_humanize_postprocess_prompt(
+        SAMPLE_AI_TEXT, raw_violations, strength=Strength.HIGH
+    ):
+        print("  ⚠ HIGH did not pick the rewrite template")
+        return 1
+    print("\n  ✓ all three strengths produce distinct prompts "
+          "(LOW < MEDIUM, HIGH = aggressive template)")
+
+    _section("6. (optional) full LLM polish")
     if not (
         os.getenv("OPENAI_API_KEY")
         or os.getenv("ANTHROPIC_API_KEY")
