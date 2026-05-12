@@ -16,6 +16,73 @@ milestone (M1, M2, ...).
 > match the plan (Binoculars wrapper = plan-M7, Strength knob =
 > plan-M6) and left the earlier dev-history labels untouched.
 
+### M9 — Examples + auto-generated rules doc
+
+Closes plan-M9's exit criterion: `examples/` mirrors `humanize-zh`'s
+layout, README ships the §9 limitations block verbatim, and
+`docs/rules.md` is now auto-generated from `rules.json`. **plan-M8
+(benchmark suite + §7.1 humanization gate) is the only remaining
+v0.1 milestone** before PyPI release (plan-M10).
+
+- New `scripts/gen_rules_doc.py` — stdlib-only generator that
+  renders `humanize_en/_lang/en/data/rules.json` (26 rules across
+  6 categories) into a human-readable Markdown reference. Pure
+  function `render_rules_doc(rules) -> str` for in-memory testing;
+  CLI supports `--rules` / `--out` / `--check` (CI mode that exits
+  non-zero when the on-disk doc is stale). Idempotent: running
+  twice on the same input produces byte-identical output.
+- New `docs/rules.md` (12.6 KB) — full rule index with per-rule
+  description, weight, threshold ladder, and sample patterns.
+  Marked as auto-generated at the top so contributors don't waste
+  time editing it by hand.
+- New `examples/` directory mirroring `humanize-zh/examples/`
+  byte-for-byte modulo language:
+  - `01_detect_only.py` — three-layer scoring, no LLM.
+    Demonstrates `score` / `ngram_score` / `combined_score`
+    against an over-the-top "AI essay" sample that fires 11
+    violations and scores 65.5 / 100 on the rule layer alone.
+  - `02_polish_with_llm.py` — `postprocess_humanize` with
+    before/after deltas. Falls back to deterministic-cleanup-only
+    with a warning when no provider env var is set.
+  - `03_iterative_loop.py` — `iterative_polish` with writer ≠
+    judge providers (DeepSeek + Anthropic by default) and 3-round
+    target_ai_score=30 termination.
+  - `04_inject_rules_into_prompt.py` — pure string assembly,
+    splices `build_humanize_prompt(scene="analysis")` into the
+    caller's own writing prompt.
+  - `examples/README.md` — index table with LLM-requirement
+    column, links across to humanize-zh's parallel examples.
+- New Makefile targets:
+  - `make rules-doc` — regenerate `docs/rules.md`.
+  - `make rules-doc-check` — CI gate that fails when the doc is
+    stale (mirrors the equivalent CI gate that runs in the test
+    suite, so drift is caught from either entry point).
+  - `make examples` — fast smoke run of the two no-LLM examples
+    (01, 04).
+- README §"Limitations / Humanization" tweaked from
+  `**not**` → `NOT` (uppercase, no bold) to match `docs/plan.md`
+  §9 verbatim. The plan explicitly marks that block as
+  non-negotiable for v0.1 release.
+- 20 new tests:
+  - `tests/test_rules_doc_gen.py` (10): renderer is idempotent;
+    deterministic across dict-ordering perturbations; `docs/rules.md`
+    on disk matches `rules.json`; every category and every rule
+    name appears in the rendered doc; metadata block present;
+    auto-generated banner present; total rule count correct;
+    `--check` mode passes when in-sync, fails when stale.
+  - `tests/test_examples_smoke.py` (10): every example compiles
+    cleanly under the current package layout; every
+    `from humanize_en import ...` statement in every example
+    actually resolves; the two no-LLM examples (01, 04) run
+    end-to-end without crashing and produce non-trivial stdout;
+    README ↔ filesystem consistency in both directions (every
+    documented script exists; every on-disk script is
+    documented); example 01's article still scores ≥ 25 on the
+    rule layer so the pedagogical demo doesn't go mute if the
+    rule weights drift.
+- All **218 tests pass** (175 prior + 23 top-level API + 20 new);
+  ruff clean; line coverage holds at 84%.
+
 ### Top-level convenience API (post-M7 plumbing, pre-M8)
 
 Closes the README's "the public functions above are not yet wired"

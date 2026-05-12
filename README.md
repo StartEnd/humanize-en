@@ -16,8 +16,8 @@ Status by milestone (numbering matches `docs/plan.md` §10):
 | M5  | Replacements (102 pairs) + prompts (writer/judge/loop) | ✅ |
 | M6  | Strength knob (low / medium / high)            | ✅ |
 | M7  | Optional Binoculars perplexity wrapper         | ✅ |
+| M9  | Examples + auto-generated rules docs           | ✅ |
 | M8  | Benchmark suite + §7.1 humanization gate       | pending |
-| M9  | Examples + auto-generated rules docs           | pending |
 | M10 | PyPI release                                   | pending |
 
 ## What this is (when finished, ~M10)
@@ -129,8 +129,14 @@ print(verdict["publishable"], verdict.get("rewrite_brief"))
 EN-defaulted thin shims over `humanize_core` — see
 `humanize_en/{postprocess,judge,iterative}.py` for the exact
 forwarding contract. The `humanize-en` standalone CLI is still
-pending (M9); for now use `python -m humanize_en.judge file.md`
-or the framework's multi-language CLI in `humanize-core`.
+pending (M10 / PyPI prep); for now use `python -m humanize_en.judge
+file.md` or the framework's multi-language CLI in `humanize-core`.
+
+See [`examples/`](examples/) for four self-contained ~50-line
+scripts (detect-only, polish, iterative, prompt-injection) and
+[`docs/rules.md`](docs/rules.md) for the auto-generated rule
+reference (26 rules across 6 categories, with descriptions,
+weights, and sample patterns).
 
 ## Optional: Binoculars perplexity signal (M7)
 
@@ -192,7 +198,7 @@ This section is non-negotiable for v0.1 release. Verbatim:
 
 ### Humanization
 
-- Our humanizer is rule-driven + LLM-polished. It is **not** designed
+- Our humanizer is rule-driven + LLM-polished. It is NOT designed
   to evade detection — that would be both an arms race and an
   endorsement of academic dishonesty. It is designed to make
   AI-assisted writing read more naturally.
