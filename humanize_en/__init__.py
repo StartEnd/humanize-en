@@ -56,6 +56,10 @@ from humanize_core.language_registry import (
 from humanize_core.protocols import LanguageProfile
 
 from ._lang.en.profile import en_profile
+from .prompt import (
+    build_humanize_postprocess_prompt,
+    build_humanize_prompt,
+)
 
 __version__ = "0.1.0a0"
 
@@ -86,4 +90,7 @@ __all__ = [
     "LanguageAlreadyRegistered",
     "UnknownLanguage",
     "en_profile",
+    # M6 prompt assembly
+    "build_humanize_prompt",
+    "build_humanize_postprocess_prompt",
 ]

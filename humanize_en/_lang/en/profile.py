@@ -41,19 +41,38 @@ from .replacements import en_replacements
 def _build_en_prompt_pack() -> PromptPack:
     """Build the EN ``PromptPack``.
 
-    At M1 we do **not** set ``writer_prompt_builder`` — the framework
-    falls back to naive ``str.format(ARTICLE=...)`` on
-    :data:`POSTPROCESS_PROMPT`, which is sufficient for the EN
-    placeholder prompt shipped by ``humanize-core`` (it carries only
-    an ``{ARTICLE}`` placeholder, no ``{VIOLATIONS}`` injection).
+    M6 wires ``writer_prompt_builder`` to
+    :func:`humanize_en.prompt.build_humanize_postprocess_prompt`,
+    which assembles the real EN postprocess prompt with
+    ``{VIOLATIONS}`` and ``{HUMANIZE_RULES}`` injection. Without
+    this hook, ``humanize-core``'s naive ``str.format(ARTICLE=...)``
+    fallback would raise ``KeyError`` because the EN
+    :data:`POSTPROCESS_PROMPT` declares all three placeholders.
 
-    M5 will wire ``writer_prompt_builder`` to a real EN dispatcher
-    that injects ``{VIOLATIONS}`` and ``{HUMANIZE_RULES}`` from the
-    new humanize-en-owned templates, matching the ZH plugin's pattern.
-
-    The strength knob (low/medium/high, Humano-inspired) lands in M6
-    and will plumb through ``aggressive`` → an enum on the builder.
+    The import of :mod:`humanize_en.prompt` is deferred inside the
+    factory to avoid an import cycle:
+    ``humanize_en.prompt`` re-exports symbols from
+    :mod:`humanize_en._lang.en.prompts` (which this module also
+    imports), so importing the dispatcher at module-level here would
+    re-enter ``humanize_en.prompt``'s import while we are still in
+    the middle of loading this profile module.
     """
+    from ...prompt import build_humanize_postprocess_prompt
+
+    def _en_writer_prompt_builder(
+        *,
+        article: str,
+        violations: list,
+        scene: str,
+        aggressive: bool,
+    ) -> str:
+        return build_humanize_postprocess_prompt(
+            article,
+            violations,
+            scene=scene,
+            aggressive=aggressive,
+        )
+
     return PromptPack(
         code="en",
         writer_system="",
@@ -62,7 +81,7 @@ def _build_en_prompt_pack() -> PromptPack:
         judge_user_template=JUDGE_PROMPT,
         loop_judge_user_template=LOOP_JUDGE_PROMPT,
         rules_section=build_humanize_prompt(scene="analysis"),
-        # writer_prompt_builder=None at M1 — see M5 plan
+        writer_prompt_builder=_en_writer_prompt_builder,
     )
 
 
@@ -91,7 +110,7 @@ def make_en_profile() -> LanguageProfile:
             "rule_set_version": en_detector.version,
             "ngram_corpus_id": en_ngram.corpus_id,
             "ngram_test_auc": "0.8847",  # held-out test AUC, see CHANGELOG M2
-            "milestone": "M5-replacements",
+            "milestone": "M6-prompt-pack",
         },
     )
 

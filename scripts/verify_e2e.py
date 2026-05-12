@@ -146,7 +146,43 @@ def main() -> int:  # noqa: PLR0915 - smoke-test script, OK
         return 1
     print(f"\n  ✓ rule score dropped {rule_drop:.1f} pts after deterministic clean")
 
-    _section("4. (optional) full LLM polish")
+    _section("4. writer prompt assembly (M6) — no LLM call")
+    builder = profile.prompt_pack.writer_prompt_builder
+    if builder is None:
+        print("  ⚠ profile.prompt_pack.writer_prompt_builder is None! "
+              "M6 wiring missing.")
+        return 1
+    writer_prompt = builder(
+        article=SAMPLE_AI_TEXT,
+        violations=raw_violations,
+        scene="analysis",
+        aggressive=False,
+    )
+    print(f"writer prompt length  : {len(writer_prompt)} chars")
+    has_article = SAMPLE_AI_TEXT[:60] in writer_prompt
+    has_violations = "blacklist_words.liang_2024_lexical_tells" in writer_prompt
+    has_rules = "Five core rules" in writer_prompt
+    print(f"  contains ARTICLE    : {has_article}")
+    print(f"  contains VIOLATIONS : {has_violations}")
+    print(f"  contains RULES      : {has_rules}")
+    if not (has_article and has_violations and has_rules):
+        print("\n  ⚠ writer prompt missing one of the three injection points")
+        return 1
+    print("\n  ✓ writer prompt assembled with all 3 injections "
+          "(article + violations + rules)")
+    # Aggressive variant smoke test.
+    aggr = builder(
+        article=SAMPLE_AI_TEXT,
+        violations=raw_violations,
+        scene="analysis",
+        aggressive=True,
+    )
+    if "AI text deep rewrite pass" not in aggr:
+        print("  ⚠ aggressive=True did NOT pick the rewrite template")
+        return 1
+    print("  ✓ aggressive=True correctly routes to rewrite template")
+
+    _section("5. (optional) full LLM polish")
     if not (
         os.getenv("OPENAI_API_KEY")
         or os.getenv("ANTHROPIC_API_KEY")

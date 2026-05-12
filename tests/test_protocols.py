@@ -219,28 +219,45 @@ def test_replacements_table_loads_populated_pairs_at_m5() -> None:
         assert isinstance(new, str)
 
 
-def test_prompt_pack_carries_framework_en_templates() -> None:
-    """Until M5 ships humanize-en-owned prompts, the PromptPack must
-    re-export the EN placeholder prompts that ``humanize-core``
-    already ships. This guarantees ``polish(text, lang="en")`` works
-    out of the box even before M5.
+def test_prompt_pack_uses_humanize_en_owned_templates_at_m6() -> None:
+    """M6 replaces the M1 framework placeholders with humanize-en-owned
+    templates. The PromptPack now references the strings declared in
+    :mod:`humanize_en._lang.en.prompts`, *not* the ones in
+    :mod:`humanize_core.prompt`. Also verifies that
+    ``writer_prompt_builder`` is wired so callers can inject
+    ``{VIOLATIONS}`` and ``{HUMANIZE_RULES}``.
     """
     from humanize_core.prompt import (
-        JUDGE_PROMPT_EN,
-        LOOP_JUDGE_PROMPT_EN,
-        POSTPROCESS_PROMPT_EN,
+        JUDGE_PROMPT_EN as CORE_JUDGE,
+    )
+    from humanize_core.prompt import (
+        LOOP_JUDGE_PROMPT_EN as CORE_LOOP,
+    )
+    from humanize_core.prompt import (
+        POSTPROCESS_PROMPT_EN as CORE_POSTPROCESS,
     )
 
     from humanize_en._lang.en.profile import en_profile
+    from humanize_en._lang.en.prompts import (
+        JUDGE_PROMPT,
+        LOOP_JUDGE_PROMPT,
+        POSTPROCESS_PROMPT,
+    )
 
     pp = en_profile.prompt_pack
-    assert pp.writer_user_template is POSTPROCESS_PROMPT_EN
-    assert pp.judge_user_template is JUDGE_PROMPT_EN
-    assert pp.loop_judge_user_template is LOOP_JUDGE_PROMPT_EN
-    # ``writer_prompt_builder`` is intentionally None at M1 — the
-    # framework's naive str.format suffices for the placeholder
-    # template. M5 wires this to a real EN dispatcher.
-    assert pp.writer_prompt_builder is None
+    # Plugin-owned templates win.
+    assert pp.writer_user_template is POSTPROCESS_PROMPT
+    assert pp.judge_user_template is JUDGE_PROMPT
+    assert pp.loop_judge_user_template is LOOP_JUDGE_PROMPT
+    # Sanity: they really are different strings from the core fallbacks.
+    assert pp.writer_user_template is not CORE_POSTPROCESS
+    assert pp.judge_user_template is not CORE_JUDGE
+    assert pp.loop_judge_user_template is not CORE_LOOP
+    # M6 wires the writer builder. The framework's naive
+    # ``str.format(ARTICLE=...)`` would now blow up on the EN
+    # template (which carries {VIOLATIONS} / {HUMANIZE_RULES} too),
+    # so the builder is mandatory at M6+.
+    assert pp.writer_prompt_builder is not None
 
 
 # ─── End-to-end smoke ───────────────────────────────────────────────────

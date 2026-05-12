@@ -9,6 +9,84 @@ milestone (M1, M2, ...).
 
 ## [Unreleased]
 
+### M6 — Plugin-owned prompt pack (in progress)
+
+- Replaced ``humanize_en/_lang/en/prompts.py`` (was a re-export stub
+  pulling humanize-core's EN placeholders) with **822 lines of
+  EN-specific prompt content**:
+  - 8 modular section constants:
+    ``CORE_RULES``, ``HARD_NEVER``, ``HARD_LIMITS``,
+    ``WORDS_BLACKLIST``, ``OPENING_DIVERSITY``, ``SOUL_INJECTION``,
+    ``ASSERTION_TEMPLATE``, ``SELF_CHECK``. Each section is
+    ~500-2200 chars of Markdown that the writer LLM reads.
+  - Rule names from M3 + M4 (``meta_hedge``,
+    ``liang_2024_lexical_tells``, ``filler_opener``,
+    ``ai_hedging_adverbs``, ``hollow_grand_claims``,
+    ``para_opening_enumeration``, ``sentence_length_cv``,
+    ``concrete_specifics``, ``contrarian_hinge``,
+    ``vague_personal_experience``, ``paragraph_uniformity``)
+    are pinned in the ``SELF_CHECK`` checklist so the LLM knows
+    exactly which detector rule each line came from.
+  - 4-key ``SCENES`` table: ``analysis`` (8 sections),
+    ``essay`` (7), ``academic`` (5), ``blog`` (6) — same scenes
+    as humanize-zh.
+  - ``build_humanize_prompt(scene, *, compact=False)`` assembler
+    that mirrors humanize-zh's ZH builder.
+  - 4 fully-authored prompt templates:
+    ``POSTPROCESS_PROMPT`` (light polish; 3 placeholders:
+    ``{ARTICLE}`` / ``{VIOLATIONS}`` / ``{HUMANIZE_RULES}``),
+    ``POSTPROCESS_PROMPT_AGGRESSIVE`` (full rewrite-level for
+    detector-failed text; 2 placeholders),
+    ``JUDGE_PROMPT`` (final editorial review with the 7-field JSON
+    schema; 1 placeholder), and
+    ``LOOP_JUDGE_PROMPT`` (in-loop AI-likelihood probe with the
+    3-field JSON schema; 1 placeholder).
+- New module ``humanize_en/prompt.py`` — public dispatcher mirroring
+  ``humanize_zh.prompt``. Houses
+  ``build_humanize_postprocess_prompt(article, violations, scene,
+  *, aggressive)`` which:
+  - bullet-formats violations from
+    ``humanize_en._lang.en.detector.RuleViolation`` (caps at 30
+    entries to keep the prompt manageable),
+  - inserts a placeholder note when the rule scanner finds nothing
+    (so the LLM knows to focus on rhythm rather than vocabulary),
+  - picks ``POSTPROCESS_PROMPT_AGGRESSIVE`` when ``aggressive=True``
+    and ``POSTPROCESS_PROMPT`` otherwise.
+- Wired ``writer_prompt_builder`` on the EN PromptPack (was
+  intentionally ``None`` at M1). The framework's
+  ``humanize_core.postprocess._build_writer_prompt`` now routes EN
+  polish through the dispatcher; without this hook, the framework's
+  naive ``str.format(ARTICLE=...)`` would raise ``KeyError`` on the
+  new template's three placeholders.
+- Bumped ``profile.metadata['milestone']`` to ``M6-prompt-pack``.
+- Added 23 prompt tests (``tests/test_prompts.py``):
+  - Section-constant validity (>= 200 chars, valid H2 opener,
+    unique headings).
+  - SCENES key set, every scene length within ``[2000, 30000]``
+    chars, unknown-scene fallback, ``compact=True`` drops the header.
+  - Each template carries the placeholders the dispatcher fills,
+    and **none of the JSON-output templates declare placeholders
+    they don't need** (catches accidental cross-contamination).
+  - Schema-presence checks: ``JUDGE_PROMPT`` declares all 7 fields;
+    ``LOOP_JUDGE_PROMPT`` declares ``ai_score`` / ``tells`` /
+    ``verdict``.
+  - Dispatcher behaviour: article + violations + rules injection,
+    aggressive flag picks the rewrite template, empty-violations
+    placeholder, 30-violation truncation cap, every scene renders.
+  - Integration: ``en_profile.prompt_pack.writer_prompt_builder``
+    routes through the dispatcher with all three substitutions.
+- Updated ``tests/test_protocols.py``: flipped M1's "uses
+  framework placeholders" assertion to M6's "uses humanize-en-owned
+  templates and has writer_prompt_builder wired".
+- Extended ``scripts/verify_e2e.py`` with a layer-4 step that
+  builds a real writer prompt (no LLM call) and verifies all three
+  injection points landed. Re-running on the 1063-char curated
+  AI sample now produces a **14011-char writer prompt** that
+  carries the article + 13 detected violations + the 11k-char
+  rules block.
+- Total test count: **122** (89 M5 + 23 M6 + 10 M6-flipped from
+  M1), 92% coverage, ruff/mypy clean.
+
 ### M5 — Deterministic replacement table (in progress)
 
 - Filled ``humanize_en/_lang/en/data/replacements.json`` (v0.5.0) —
