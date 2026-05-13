@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  # ── lint ───────────────────────────────────────────────────────────────
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dev dependencies
+        run: uv sync --extra dev --extra openai --extra anthropic
+
+      - name: ruff check
+        run: uv run ruff check humanize_en/ tests/
+
+      - name: mypy
+        run: uv run mypy humanize_en/
+
+  # ── test matrix ────────────────────────────────────────────────────────
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        # [dev] already chains humanize-core[ui] (fastapi/jinja2/httpx)
+        # so the HTMX tests in tests/test_web_app.py run in full.
+        run: uv sync --extra dev --extra openai --extra anthropic
+
+      - name: pytest (unit + integration + bench-structure)
+        run: uv run pytest --cov-report=xml
+
+      - name: Upload coverage
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  # ── build + wheel smoke test ────────────────────────────────────────────
+  build:
+    name: build wheel
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Verify wheel installs cleanly
+        run: |
+          uv venv check-install
+          uv pip install --python check-install/bin/python dist/*.whl
+          check-install/bin/python -c "import humanize_en; print(humanize_en.__version__)"
+          check-install/bin/python -m humanize_en.cli --version
+
+      - name: Verify HTMX templates ship with wheel
+        run: |
+          # humanize_en.web.app requires Jinja2 templates baked into the
+          # wheel. If hatch ever drops the templates subpackage, this
+          # fires before the wheel reaches TestPyPI.
+          uv pip install --python check-install/bin/python \
+            "humanize-core[ui]" 2>/dev/null || true
+          uv pip install --python check-install/bin/python \
+            "fastapi" "jinja2" "httpx" 2>/dev/null || true
+          check-install/bin/python - <<'EOF'
+          from humanize_en.web.app import app
+          from fastapi.testclient import TestClient
+          r = TestClient(app).get("/")
+          assert r.status_code == 200, f"GET / returned {r.status_code}"
+          assert b"humanize-en" in r.content, "EN copy missing from index"
+          print(f"GET / OK ({len(r.content)} bytes)")
+          EOF
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.sha }}
+          path: dist/
+          retention-days: 7
+
+  # ── TestPyPI dry-run ────────────────────────────────────────────────────
+  # Runs only on a version tag push (vX.Y.Z).
+  # Requires a repo secret: TESTPYPI_API_TOKEN
+  # Create one at https://test.pypi.org/manage/account/token/
+  # then add it under Settings → Secrets → Actions → New repository secret.
+  publish-testpypi:
+    name: publish → TestPyPI
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/humanize-en/
+    permissions:
+      id-token: write      # required for trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to TestPyPI
+        run: uv publish --index testpypi
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.TESTPYPI_API_TOKEN }}

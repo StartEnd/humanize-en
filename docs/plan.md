@@ -557,7 +557,7 @@ v0.1 release.
 | **M8** | **Benchmark suite + gates** | 1 day | `make bench` runs §7.1 Binoculars-drop gate locally; ≥80% of 100 RAID-news samples drop by ≥0.3. BERTScore-F1 ≥ 0.85. Results written to `docs/benchmarks.md`. |
 | **M9** | **Docs + examples + CHANGELOG + README limitations block** | 0.5 day | Mirror `humanize-zh/examples/`. README has the §9 limitations block verbatim. `docs/rules.md` auto-generated from `rules.json`. |
 | **M10** | **PyPI release** | 0.5 day | Build wheel, TestPyPI dry-run, fresh-venv `pip install humanize-en` → CLI works. `pip install humanize-en[perplexity]` adds Binoculars tier. |
-| **M11** | **HTMX web UI for EN (multi-language template kit)** | 1 day | `humanize-en ui` serves a working HTMX single-page UI on `GET /`. `tests/test_ui_routes.py` flips from "no HTMX routes" assertions to positive checks on `/htmx/{detect,polish,oneshot,oneshot-loop,judge}`. Templates are EN-localised (no Chinese strings, no `朱雀检测` references) and built on top of `humanize_core.web.app.create_app(templates_dir=…)` rather than humanize-zh's standalone `web/app.py` (which predates the multi-language factory). |
+| **M11** ✅ | **HTMX web UI for EN (multi-language template kit)** | 1 day | `humanize-en ui` serves a working HTMX single-page UI on `GET /`. `tests/test_web_app.py` covers all five `/htmx/{detect,polish,oneshot,oneshot-loop,judge}` endpoints with stub LLM providers (12 tests, no live LLM). Templates fully EN-localised — no Chinese strings, `朱雀检测` → GPTZero + ZeroGPT, provider hints updated to `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/`DEEPSEEK_API_KEY`. Built on `humanize_core.web.app.create_app(templates_dir=…)`. `.github/workflows/ci.yml` added with test matrix (py3.10/3.11/3.12) + wheel smoke test + TestPyPI publish step (tag-gated, needs `TESTPYPI_API_TOKEN` secret). |
 
 **Total: ~8.5 dev days** including M11. Wall-clock 2 weeks with
 overrun budget on M2 (corpus tooling sticky), M8 (Binoculars
@@ -669,10 +669,12 @@ routes (no more ``_until_m11`` skips).
    news/academic/casual markers in first 500 tokens). Default
    to `news`. Document the heuristic and fallback in
    `docs/rules.md`.**
-5. **CI strategy.** GitHub Actions matching humanize-zh's
-   `.github/workflows/`. RAID-bench and Binoculars gates stay
-   local-only (corpus + model size unfit for CI runners). CI runs
-   unit tests, lint, typecheck only.
+5. **CI strategy.** ✅ `.github/workflows/ci.yml` added (M11).
+   Mirrors humanize-zh's workflow. Jobs: `lint` (ruff + mypy) →
+   `test` matrix (py3.10/3.11/3.12, includes HTMX web tests) →
+   `build` (wheel smoke test, verifies templates ship) →
+   `publish-testpypi` (tag-gated, OIDC, needs `TESTPYPI_API_TOKEN`
+   secret). RAID-bench and Binoculars gates stay local-only.
 
 ---
 
