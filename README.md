@@ -1,6 +1,6 @@
 # humanize-en
 
-**Alpha (M10 — PyPI release prep).** English AI-text humanizer
+**Alpha (M11 shipped — HTMX web UI live).** English AI-text humanizer
 plugin for [`humanize-core`](../humanize-core/). Sibling to
 [`humanize-zh`](../humanize-zh/). Roadmap and prior-art survey in
 [`docs/plan.md`](docs/plan.md).

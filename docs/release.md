@@ -14,13 +14,15 @@ section covers what to do until it ships.
 ## 0. One-time setup (per machine)
 
 ```bash
-# Build/upload tooling — installed once, not in the repo's deps.
-pipx install build twine        # `pipx` keeps these out of the project venv.
+# uv is all you need — it builds and publishes.
+# https://docs.astral.sh/uv/
+brew install uv   # or: curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# TestPyPI + PyPI credentials. Use an API token (not your password).
+# TestPyPI + PyPI credentials. Create an API token (not your password).
 #   https://test.pypi.org/manage/account/token/    →  scope = "Entire account"
 #   https://pypi.org/manage/account/token/         →  scope = project-specific after first release
-# Store via ~/.pypirc or env vars TWINE_USERNAME=__token__ TWINE_PASSWORD=pypi-…
+# Supply at publish time via: UV_PUBLISH_TOKEN=pypi-… uv publish …
+# (never store the token in the repo or shell history)
 ```
 
 ## 1. Pre-flight checklist
@@ -42,7 +44,7 @@ modes are expensive.
 - [ ] `CHANGELOG.md` has a dated entry for this version.
 - [ ] Full test suite is green:
       ```bash
-      uv run pytest --no-cov -q                       # 265 tests, ~3 s
+      uv run pytest --no-cov -q                       # 282 tests, ~4 s
       uv run pytest tests/bench --no-cov -q           # 11 + 3 skips (no LLM / no GPU)
       uv run pytest -q --cov=humanize_en              # coverage report
       ```
@@ -56,6 +58,9 @@ modes are expensive.
       uv run humanize-en --version
       uv run humanize-en detect README.md          # any markdown file works
       uv run humanize-en providers
+      uv run humanize-en ui &                      # check GET / returns HTML
+      sleep 2 && curl -sf http://127.0.0.1:8765/ | grep -q humanize-en && echo OK
+      kill %1
       ```
 - [ ] Auto-generated docs are in sync:
       ```bash
@@ -99,10 +104,10 @@ notes. **Do not** ship a wheel that no installer can resolve.
 
 ```bash
 # Clean the previous artifacts.
-rm -rf dist/ build/ *.egg-info
+rm -rf dist/
 
-# Build sdist + wheel. Hatchling is configured in pyproject.toml.
-uv run python -m build
+# Build sdist + wheel (hatchling backend, configured in pyproject.toml).
+uv build
 ```
 
 Expected output:
@@ -137,39 +142,53 @@ not the project's uv venv. This catches missing-data /
 missing-entry-point bugs that an editable install would mask.
 
 ```bash
-python -m venv /tmp/he-smoke && source /tmp/he-smoke/bin/activate
-pip install --upgrade pip
-pip install dist/humanize_en-*.whl
-humanize-en --version                # sanity
-humanize-en detect README.md         # data files reachable?
-python -c "from humanize_en import score; print(score('Hello world.').level)"
-deactivate && rm -rf /tmp/he-smoke
+uv venv /tmp/he-smoke --python 3.12
+uv pip install --python /tmp/he-smoke/bin/python \
+    "humanize-core[ui]>=0.1.0a1" dist/humanize_en-*.whl
+/tmp/he-smoke/bin/humanize-en --version        # sanity
+/tmp/he-smoke/bin/humanize-en detect README.md # data files reachable?
+/tmp/he-smoke/bin/python -c "
+from humanize_en.web.app import app
+routes = {r.path for r in app.routes if hasattr(r, 'path')}
+assert '/' in routes and '/htmx/detect' in routes
+print('HTMX routes OK:', sorted(r for r in routes if r.startswith('/htmx')))
+"
+rm -rf /tmp/he-smoke
 ```
 
 ## 4. TestPyPI dry-run
 
 ```bash
-# Upload to TestPyPI. `--repository testpypi` reads ~/.pypirc.
-twine check dist/*                              # last-mile lint
-twine upload --repository testpypi dist/*
+# Publish humanize-core first (humanize-en depends on it).
+UV_PUBLISH_TOKEN=pypi-… uv publish \
+    --publish-url https://test.pypi.org/legacy/ \
+    /path/to/humanize-core/dist/humanize_core-*.whl \
+    /path/to/humanize-core/dist/humanize_core-*.tar.gz
+
+# Then publish humanize-en.
+UV_PUBLISH_TOKEN=pypi-… uv publish \
+    --publish-url https://test.pypi.org/legacy/ \
+    dist/*
 ```
 
 Then re-run the smoke install from TestPyPI (this is the **real**
 test, not the wheel-from-local-disk smoke in §3.2):
 
 ```bash
-python -m venv /tmp/he-testpypi && source /tmp/he-testpypi/bin/activate
-pip install --upgrade pip
-# TestPyPI for our package; main PyPI for sub-deps (httpx etc.) that
-# aren't mirrored on TestPyPI.
-pip install \
+uv venv /tmp/he-testpypi --python 3.12
+uv pip install --python /tmp/he-testpypi/bin/python \
     --index-url       https://test.pypi.org/simple/ \
     --extra-index-url https://pypi.org/simple/ \
-    'humanize-en[openai]'
-humanize-en --version
-humanize-en detect README.md
-humanize-en providers
-deactivate && rm -rf /tmp/he-testpypi
+    'humanize-en[ui]'
+/tmp/he-testpypi/bin/humanize-en --version
+/tmp/he-testpypi/bin/humanize-en detect README.md
+/tmp/he-testpypi/bin/humanize-en providers
+/tmp/he-testpypi/bin/python -c "
+from humanize_en.web.app import app
+routes = {r.path for r in app.routes if hasattr(r,'path')}
+assert '/htmx/detect' in routes; print('UI routes OK')
+"
+rm -rf /tmp/he-testpypi
 ```
 
 If any of those four commands fails, **stop**: the published
@@ -183,7 +202,13 @@ disallows re-uploading the same version even after a yank).
 Only after every checkbox in §1–§4 is ticked.
 
 ```bash
-twine upload dist/*                             # real PyPI
+# Upload humanize-core to real PyPI first (same ordering as TestPyPI).
+UV_PUBLISH_TOKEN=pypi-… uv publish \
+    /path/to/humanize-core/dist/humanize_core-*.whl \
+    /path/to/humanize-core/dist/humanize_core-*.tar.gz
+
+# Then humanize-en.
+UV_PUBLISH_TOKEN=pypi-… uv publish dist/*
 ```
 
 Then tag and push:
