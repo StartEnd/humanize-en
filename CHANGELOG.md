@@ -47,6 +47,11 @@ Chinese copy remaining.
   conftest so no real LLM is called. Each test also checks that
   no Chinese copy (`朱雀`, `各轮`, `评审`, `润色`) leaked into
   the EN fragments.
+- **TestPyPI dry-run** — `humanize-core==0.1.0a1` and
+  `humanize-en==0.1.0a1` published to test.pypi.org. Fresh-venv
+  smoke test confirmed: 5 HTMX routes registered, all 9 HTML
+  templates baked into the wheel, `humanize-en --version` prints
+  `0.1.0a1`.
 
 > **Numbering note.** The first six entries below (M1–M6) shipped under
 > their development labels. The plan in `docs/plan.md` §10 groups
