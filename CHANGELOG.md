@@ -9,6 +9,45 @@ milestone (M1, M2, ...).
 
 ## [Unreleased]
 
+### M11 — HTMX web UI for English
+
+Closes plan-M11. `humanize-en ui` now serves a full single-page HTMX UI
+at `GET /` — detect / polish / judge tabs, closed-loop tab, provider
+status banner, and all result fragments translated to English with no
+Chinese copy remaining.
+
+- **`humanize_en/web/`** — new subpackage. `app.py` is a ~30-line
+  shim over `humanize_core.web.app.create_app(templates_dir=…)`;
+  the factory's HTMX block registers all five HTMX endpoints and
+  `GET /` automatically once a valid templates dir is provided.
+  `humanize_en.web` is the first plugin to exercise this factory
+  path in production (humanize-zh predates the factory and has its
+  own standalone web app).
+- **`humanize_en/web/templates/`** (9 files) — ported + translated
+  from `humanize_zh.web.templates`. Changes vs the ZH originals:
+  - `lang` select collapsed to single `en` option (mono-language
+    plugin; no `zh` option offered).
+  - `朱雀检测 https://matrix.tencent.com/ai-detect/` →
+    [GPTZero](https://gptzero.me/) + [ZeroGPT](https://www.zerogpt.com/)
+    links with a pointer to the `[perplexity]` Binoculars extra.
+  - Chinese-only provider hints (Hunyuan, Qwen, DashScope) →
+    `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`.
+  - Typical EN AI-tell examples replace ZH counterparts in the
+    unchanged-output help text.
+  - `base.html` gains Alpine.js CDN (needed for `[x-cloak]`
+    tab-state management); no Alpine.js was loaded in the M10
+    placeholder.
+- **`humanize_en/cli/main.py`** — `cmd_ui` repointed from
+  `humanize_core.web.app:app` (JSON-only) to
+  `humanize_en.web.app:app` (HTMX UI). Banner changed from
+  `"humanize-en JSON API: ..."` to `"humanize-en UI: ..."`.
+- **`tests/test_web_app.py`** — expanded from 6 to 12 tests.
+  Adds fragment-shape tests for all five HTMX endpoints using
+  `llm.use_callable(fake_polish_fn / fake_judge_fn)` from
+  conftest so no real LLM is called. Each test also checks that
+  no Chinese copy (`朱雀`, `各轮`, `评审`, `润色`) leaked into
+  the EN fragments.
+
 > **Numbering note.** The first six entries below (M1–M6) shipped under
 > their development labels. The plan in `docs/plan.md` §10 groups
 > "replacements" and "prompts" into a single **M5**, shifting later

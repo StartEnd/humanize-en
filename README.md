@@ -19,7 +19,7 @@ Status by milestone (numbering matches `docs/plan.md` §10):
 | M9  | Examples + auto-generated rules docs           | ✅ |
 | M8  | Benchmark suite + §7 gates (structure + skip-marked numbers) | ✅ structure / 🟡 numbers pending GPU run |
 | M10 | CLI + LICENSE + TestPyPI release prep          | ✅ |
-| M11 | HTMX web UI for EN (multi-language template kit) | 📝 planned (see `docs/plan.md` §M11) |
+| M11 | HTMX web UI for EN (multi-language template kit) | ✅ shipped (`humanize-en ui` serves the full EN single-page UI) |
 
 ## What this is (when finished, ~M10)
 
@@ -154,9 +154,9 @@ humanize-en judge  article.md --json -o review.json
 # Surface auto-detected providers.
 humanize-en providers
 
-# Launch the multi-language JSON API server (humanize-core[ui]).
-# Today this is JSON-only — the HTMX web UI for EN is plan-M11.
-# Exposes /api/detect /api/polish /api/judge /api/providers /api/languages.
+# Launch the HTMX web UI + JSON API (M11 shipped).
+# Open http://127.0.0.1:8765/ in a browser — single-page UI with
+# detect / polish / judge tabs. /api/... endpoints are also available.
 humanize-en ui --port 8765
 ```
 

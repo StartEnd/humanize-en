@@ -7,11 +7,10 @@ differences vs the ZH CLI are:
 - The ``--lang`` flag is **gone**: the EN plugin is mono-language by
   construction (its shims pin ``lang="en"``). To polish Chinese,
   install ``humanize-zh``.
-- ``humanize-en ui`` boots :mod:`humanize_core.web.app` as a
-  **JSON-only API server** (the multi-language HTMX UI is
-  plan-M11). Once ``humanize-en`` is installed, the EN profile is
-  selectable via the ``lang`` form field on every ``/api/...``
-  endpoint.
+- ``humanize-en ui`` boots :mod:`humanize_en.web.app`, which serves
+  the **full HTMX + JSON API** (plan-M11, shipped). Open the printed
+  URL in a browser for the single-page UI; the ``/api/...`` endpoints
+  are also available for programmatic use.
 - ``.humanize-en.env`` (or ``HUMANIZE_EN_NO_DOTENV=1`` to opt out).
 
 Usage::
@@ -21,7 +20,7 @@ Usage::
     humanize-en judge  FILE [-o OUT] [--writer NAME] [--judge NAME] [--json]
                             [--allow-self-judge]
     humanize-en providers                  # list auto-detectable providers
-    humanize-en ui                          # multi-lang JSON API server
+    humanize-en ui                          # HTMX web UI + JSON API
 
 Global options:
     -v/--verbose     INFO-level logs
@@ -210,17 +209,19 @@ def cmd_judge(args: argparse.Namespace) -> int:
 # ─── ui / providers ─────────────────────────────────────────────────────────
 
 def cmd_ui(args: argparse.Namespace) -> int:
-    """Launch the FastAPI JSON-API server shipped with ``humanize-core[ui]``.
+    """Launch the EN HTMX web UI (FastAPI + Jinja2 + HTMX + Tailwind).
 
-    The EN plugin does **not** ship its own web app or HTMX templates
-    yet (HTMX UI for EN is plan-M11). Today, ``humanize-en ui`` boots
-    the multi-language JSON API factory in :mod:`humanize_core.web.app`,
-    which exposes ``/api/detect``, ``/api/polish``, ``/api/judge``,
-    ``/api/providers`` and ``/api/languages`` — all routed via the
-    ``lang`` form field so the EN profile lights up automatically
-    once ``humanize-en`` is installed. ``GET /`` returns 404 by
-    design until M11 wires templates in via
-    :func:`humanize_core.web.app.create_app`'s ``templates_dir`` arg.
+    Boots :mod:`humanize_en.web.app`, which calls the core factory
+    with ``templates_dir`` pointing at this package's English
+    templates. Serves:
+
+    * ``GET /`` — single-page HTMX UI (detect / polish / judge tabs)
+    * ``POST /htmx/{detect,polish,oneshot,oneshot-loop,judge}`` —
+      HTMX endpoints that return rendered HTML fragments
+    * ``/api/detect``, ``/api/polish``, ``/api/judge``,
+      ``/api/providers``, ``/api/languages``, ``/health`` —
+      JSON API (same surface as the bare core, but the EN profile
+      is always registered)
     """
     try:
         import uvicorn
@@ -229,14 +230,9 @@ def cmd_ui(args: argparse.Namespace) -> int:
             "the 'ui' extra is required to run the JSON API server. "
             "Install with: pip install 'humanize-en[ui]'"
         )
-    print(f"humanize-en JSON API: http://{args.host}:{args.port}/")
-    print(
-        "  endpoints: /api/detect /api/polish /api/judge "
-        "/api/providers /api/languages /health"
-    )
-    print("  (HTMX UI for English is plan-M11; today GET / returns 404)")
+    print(f"humanize-en UI: http://{args.host}:{args.port}/")
     uvicorn.run(
-        "humanize_core.web.app:app",
+        "humanize_en.web.app:app",
         host=args.host,
         port=args.port,
         reload=args.reload,
@@ -333,11 +329,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("providers", help="list auto-detectable providers")
     sp.set_defaults(func=cmd_providers)
 
-    # ui (FastAPI dev server, shipped with humanize-core[ui]).
-    # Today this is JSON-only — HTMX UI for EN is plan-M11.
+    # ui — HTMX web UI + JSON API (M11 shipped).
     sp = sub.add_parser(
         "ui",
-        help="launch the multi-language JSON API server (HTMX UI is plan-M11)",
+        help="launch the HTMX web UI + JSON API server",
     )
     sp.add_argument("--host", default="127.0.0.1")
     sp.add_argument("--port", type=int, default=8765)
