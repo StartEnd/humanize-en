@@ -91,8 +91,8 @@ en = "humanize_en._lang.en.profile:en_profile"
 humanize-core = { path = "../humanize-core", editable = true }
 
 [project.urls]
-Repository = "https://github.com/song/humanize-en"
-Issues = "https://github.com/song/humanize-en/issues"
+Repository = "https://github.com/StartEnd/humanize-en"
+Issues = "https://github.com/StartEnd/humanize-en/issues"
 
 [build-system]
 requires = ["hatchling"]
@@ -117,7 +117,7 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=humanize_en --cov-report=term-missing"
+addopts = "--cov=humanize_en --cov-report=term-missing --cov-report=xml"
 
 [tool.coverage.run]
 source = ["humanize_en"]
@@ -146,15 +146,8 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-# - openai/anthropic: optional LLM SDKs, not always installed.
-# - binoculars/raid: optional [perplexity] / [bench] extras.
-# - humanize_core.*: sibling package ships no ``py.typed`` marker yet.
-#   Drop this once humanize-core marks itself as typed.
+# Optional extras: not always installed.
 module = [
-    "openai.*",
-    "anthropic.*",
     "binoculars.*",
-    "raid.*",
-    "humanize_core.*",
 ]
 ignore_missing_imports = true

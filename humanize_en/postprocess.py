@@ -24,6 +24,7 @@ The ``Score`` / ``Violation`` re-exports come from
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Sequence
 
 from humanize_core.postprocess import (
     _BACKTICK_NUMBER_PATTERNS,  # noqa: F401  (legacy re-export)
@@ -43,7 +44,7 @@ from humanize_core.postprocess import (
 from humanize_core.postprocess import (
     postprocess_humanize as _core_postprocess_humanize,
 )
-from humanize_core.protocols import ReplacementsTable
+from humanize_core.protocols import ReplacementsTable, RuleScoreResult
 
 from . import llm as _llm_module  # noqa: F401  (legacy import path)
 from ._lang.en.profile import en_profile
@@ -80,7 +81,7 @@ class _EnCodeReplacementsAdapter:
     def code(self) -> str:  # noqa: D401 — stub
         return "en"
 
-    def ordered_pairs(self) -> list[tuple[str, str]]:
+    def ordered_pairs(self) -> Sequence[tuple[str, str]]:
         return self._inner.ordered_pairs()
 
     def __getattr__(self, name: str):  # forward any plugin-defined extras
@@ -99,7 +100,7 @@ def _profile_with_optional_replacements(replacements: ReplacementsTable | None):
     if replacements is None:
         return en_profile
     if replacements.code != "en":
-        replacements = _EnCodeReplacementsAdapter(replacements)
+        replacements = _EnCodeReplacementsAdapter(replacements)  # type: ignore[assignment]
     return dataclasses.replace(en_profile, replacements=replacements)
 
 
@@ -128,7 +129,7 @@ def postprocess_humanize(
     detect_first: bool = True,
     force_llm: bool = False,
     replacements: ReplacementsTable | None = None,
-) -> tuple[str, Score | None, Score | None]:
+) -> tuple[str, RuleScoreResult | None, RuleScoreResult | None]:
     """One-pass de-AI polish, EN-defaulted.
 
     Args:
